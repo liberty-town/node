@@ -1,0 +1,7 @@
+package config
+
+const (
+	CHAT_MESSAGE_MAX_LENGTH       = 10 * 1024
+	CHAT_MESSAGES_LIST_COUNT      = 20
+	CHAT_CONVERSATIONS_LIST_COUNT = 10
+)

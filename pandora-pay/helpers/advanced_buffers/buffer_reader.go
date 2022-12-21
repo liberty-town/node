@@ -1,0 +1,110 @@
+package advanced_buffers
+
+import (
+	"encoding/binary"
+	"errors"
+	"liberty-town/node/cryptography"
+	"math"
+)
+
+type BufferReader struct {
+	Buf      []byte
+	Position int
+}
+
+func NewBufferReader(buf []byte) *BufferReader {
+	return &BufferReader{Buf: buf, Position: 0}
+}
+
+func (reader *BufferReader) ReadBool() (bool, error) {
+	if len(reader.Buf) > 0 {
+		if reader.Buf[reader.Position] > 1 {
+			return false, errors.New("buf[0] is invalid")
+		}
+		out := reader.Buf[reader.Position] == 1
+		reader.Position += 1
+		return out, nil
+	}
+	return false, errors.New("Error reading bool")
+}
+
+func (reader *BufferReader) ReadByte() (byte, error) {
+	if len(reader.Buf) > 0 {
+		out := reader.Buf[reader.Position]
+		reader.Position += 1
+		return out, nil
+	}
+	return 0, errors.New("Error reading byte")
+}
+
+func (reader *BufferReader) ReadBytes(count int) ([]byte, error) {
+	if len(reader.Buf) >= count {
+		out := reader.Buf[reader.Position : reader.Position+count]
+		reader.Position += count
+		return out, nil
+	}
+	return nil, errors.New("Error reading bytes")
+}
+
+func (reader *BufferReader) ReadString(limit uint64) (string, error) {
+	bytes, err := reader.ReadVariableBytes(limit)
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
+}
+
+func (reader *BufferReader) ReadVariableBytes(limit uint64) ([]byte, error) {
+	length, err := reader.ReadUvarint()
+	if err != nil {
+		return nil, err
+	}
+	if length > limit {
+		return nil, errors.New("Variable bytes exceeding maximum length")
+	}
+	var bytes []byte
+	if bytes, err = reader.ReadBytes(int(length)); err != nil {
+		return nil, err
+	}
+	return bytes, nil
+}
+
+func (reader *BufferReader) ReadHash() ([]byte, error) {
+	if len(reader.Buf) >= cryptography.HashSize {
+		out := reader.Buf[reader.Position : reader.Position+cryptography.HashSize]
+		reader.Position += cryptography.HashSize
+		return out, nil
+	}
+	return nil, errors.New("Error reading hash")
+}
+
+func (reader *BufferReader) ReadUvarint() (uint64, error) {
+	var x uint64
+	var s uint
+
+	var c byte
+	for i := reader.Position; i < len(reader.Buf); i++ {
+		b := reader.Buf[i]
+		if b < 0x80 {
+			if c >= binary.MaxVarintLen64 || c == binary.MaxVarintLen64-1 && b > 1 {
+				return 0, errors.New("Overflow")
+			}
+			reader.Position = i + 1
+			return x | uint64(b)<<s, nil
+		}
+		x |= uint64(b&0x7f) << s
+		s += 7
+		c += 1
+	}
+	return 0, errors.New("Error reading value")
+}
+
+func (reader *BufferReader) ReadFloat64() (float64, error) {
+	data, err := reader.ReadBytes(8)
+	if err != nil {
+		return 0, err
+	}
+	bits := binary.LittleEndian.Uint64(data)
+	float := math.Float64frombits(bits)
+	return float, nil
+}

@@ -1,0 +1,21 @@
+package api_common
+
+import (
+	"liberty-town/node/config"
+	"net/http"
+)
+
+type APIInfoReply struct {
+	Name       string `json:"name" msgpack:"name"`
+	Version    string `json:"version" msgpack:"version"`
+	Network    uint64 `json:"network" msgpack:"network"`
+	CPUThreads int    `json:"CPUThreads" msgpack:"CPUThreads"`
+}
+
+func (api *APICommon) GetInfo(r *http.Request, args *struct{}, reply *APIInfoReply) error {
+	reply.Name = config.NAME
+	reply.Version = config.VERSION_STRING
+	reply.Network = config.NETWORK_SELECTED
+	reply.CPUThreads = config.CPU_THREADS
+	return nil
+}
