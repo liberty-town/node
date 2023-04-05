@@ -23,10 +23,10 @@ import (
 	"liberty-town/node/validator/validation"
 )
 
-//公共网络
+// 公共网络
 var FederationsDict = generics.Map[string, *federation.Federation]{}
 
-//预定义网络
+// 预定义网络
 var federationsDescriptive = []map[string]any{
 
 	/**
@@ -215,7 +215,7 @@ func InitializeFederations() (err error) {
 				"ownership":  "/eXimwams25zTPJNhf/X9+zPROdLA6g+SHuBvlNm7OFy+jVX7DcWt0sT7+UcGJEs2hRmcg0l0EGQ/hSIYcWM9Gp0aeOyAA==",
 			},
 		}
-		federationsDescriptive[0]["ownership"] = "tObimwZQ3sbHg19g5jhrtW4tJMHZMvvlDE2ZOPeFWVPZ935gfxQUWst8El8HOEePhcpcKeo1f6JWEs5XVG273L2cYROgAA=="
+		federationsDescriptive[0]["ownership"] = "tuKBoAYJgdGCe0iB4N+JMce+xjeWcIidW+/OyfVQpKr6luw0MCVOa9jWbI2r9p5ZoYyZVy1bvCbEFh3i9d7GAWi6kX+3AA=="
 	}
 
 	for _, it := range federationsDescriptive {

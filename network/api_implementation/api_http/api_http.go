@@ -4,28 +4,37 @@ import (
 	"io"
 	"liberty-town/node/network/api_code/api_code_http"
 	"liberty-town/node/network/api_implementation/api_common"
+	"liberty-town/node/network/api_implementation/api_common/api_method_find_comments"
 	"liberty-town/node/network/api_implementation/api_common/api_method_find_conversations"
 	"liberty-town/node/network/api_implementation/api_common/api_method_find_listings"
 	"liberty-town/node/network/api_implementation/api_common/api_method_find_messages"
 	"liberty-town/node/network/api_implementation/api_common/api_method_find_reviews"
 	"liberty-town/node/network/api_implementation/api_common/api_method_get_account"
 	"liberty-town/node/network/api_implementation/api_common/api_method_get_account_summary"
+	"liberty-town/node/network/api_implementation/api_common/api_method_get_comment"
 	"liberty-town/node/network/api_implementation/api_common/api_method_get_fed"
 	"liberty-town/node/network/api_implementation/api_common/api_method_get_last_msg"
 	"liberty-town/node/network/api_implementation/api_common/api_method_get_listing"
 	"liberty-town/node/network/api_implementation/api_common/api_method_get_listing_data"
 	"liberty-town/node/network/api_implementation/api_common/api_method_get_listing_summary"
 	"liberty-town/node/network/api_implementation/api_common/api_method_get_message"
+	"liberty-town/node/network/api_implementation/api_common/api_method_get_poll"
 	"liberty-town/node/network/api_implementation/api_common/api_method_get_review"
+	"liberty-town/node/network/api_implementation/api_common/api_method_get_thread"
 	"liberty-town/node/network/api_implementation/api_common/api_method_ping"
 	"liberty-town/node/network/api_implementation/api_common/api_method_search_listings"
+	"liberty-town/node/network/api_implementation/api_common/api_method_search_threads"
 	"liberty-town/node/network/api_implementation/api_common/api_method_store_account"
 	"liberty-town/node/network/api_implementation/api_common/api_method_store_account_summary"
+	api_method_store_comment "liberty-town/node/network/api_implementation/api_common/api_method_store_comment_notjs"
 	"liberty-town/node/network/api_implementation/api_common/api_method_store_listing"
 	"liberty-town/node/network/api_implementation/api_common/api_method_store_listing_summary"
 	"liberty-town/node/network/api_implementation/api_common/api_method_store_message"
 	"liberty-town/node/network/api_implementation/api_common/api_method_store_review"
+	"liberty-town/node/network/api_implementation/api_common/api_method_store_thread"
+	"liberty-town/node/network/api_implementation/api_common/api_method_store_vote"
 	"liberty-town/node/network/api_implementation/api_common/api_method_sync_fed"
+	"liberty-town/node/network/api_implementation/api_common/api_method_sync_item"
 	"liberty-town/node/network/api_implementation/api_common/api_method_sync_list"
 	"liberty-town/node/network/api_implementation/api_common/api_types"
 	"net/url"
@@ -56,19 +65,28 @@ func NewAPI(apiCommon *api_common.APICommon) *API {
 		"get-account-summary":   api_code_http.Handle[api_types.APIMethodGetRequest, api_types.APIMethodGetResult](api_method_get_account_summary.MethodGetAccountSummary),
 		"get-msg":               api_code_http.Handle[api_types.APIMethodGetRequest, api_types.APIMethodGetResult](api_method_get_message.MethodGetMessage),
 		"get-review":            api_code_http.Handle[api_types.APIMethodGetRequest, api_types.APIMethodGetResult](api_method_get_review.MethodGetReview),
+		"get-thread":            api_code_http.Handle[api_types.APIMethodGetRequest, api_types.APIMethodGetResult](api_method_get_thread.MethodGetThread),
+		"get-comment":           api_code_http.Handle[api_types.APIMethodGetRequest, api_types.APIMethodGetResult](api_method_get_comment.MethodGetComment),
+		"get-poll":              api_code_http.Handle[api_types.APIMethodGetRequest, api_types.APIMethodGetResult](api_method_get_poll.MethodGetPoll),
 		"store-account":         api_code_http.Handle[api_types.APIMethodStoreRequest, api_types.APIMethodStoreResult](api_method_store_account.MethodStoreAccount),
 		"store-account-summary": api_code_http.Handle[api_types.APIMethodStoreRequest, api_types.APIMethodStoreResult](api_method_store_account_summary.MethodStoreAccountSummary),
 		"store-listing":         api_code_http.Handle[api_types.APIMethodStoreRequest, api_types.APIMethodStoreResult](api_method_store_listing.MethodStoreListing),
 		"store-listing-summary": api_code_http.Handle[api_types.APIMethodStoreRequest, api_types.APIMethodStoreResult](api_method_store_listing_summary.MethodStoreListingSummary),
 		"store-review":          api_code_http.Handle[api_types.APIMethodStoreRequest, api_types.APIMethodStoreResult](api_method_store_review.MethodStoreReview),
+		"store-thread":          api_code_http.Handle[api_types.APIMethodStoreRequest, api_types.APIMethodStoreResult](api_method_store_thread.MethodStoreThread),
+		"store-comment":         api_code_http.Handle[api_types.APIMethodStoreIdentityRequest, api_types.APIMethodStoreResult](api_method_store_comment.MethodStoreComment),
+		"store-vote":            api_code_http.Handle[api_types.APIMethodStoreIdentityRequest, api_types.APIMethodStoreResult](api_method_store_vote.MethodStoreVote),
 		"store-msg":             api_code_http.Handle[api_types.APIMethodStoreRequest, api_types.APIMethodStoreResult](api_method_store_message.MethodStoreMessage),
 		"get-last-msg":          api_code_http.Handle[api_method_get_last_msg.APIMethodGetLastMessageRequest, api_types.APIMethodGetResult](api_method_get_last_msg.MethodGetLastMessage),
 		"search-listings":       api_code_http.Handle[api_method_search_listings.APIMethodSearchListingsRequest, api_types.APIMethodFindListResult](api_method_search_listings.MethodSearchListings),
+		"search-threads":        api_code_http.Handle[api_method_search_threads.APIMethodSearchThreadsRequest, api_types.APIMethodFindListResult](api_method_search_threads.MethodSearchThreads),
 		"find-listings":         api_code_http.Handle[api_method_find_listings.APIMethodFindListingsRequest, api_types.APIMethodFindListResult](api_method_find_listings.MethodFindListings),
 		"find-conversations":    api_code_http.Handle[api_method_find_conversations.APIMethodFindConversationsRequest, api_types.APIMethodFindListResult](api_method_find_conversations.MethodFindConversations),
 		"find-reviews":          api_code_http.Handle[api_method_find_reviews.APIMethodFindReviewsRequest, api_types.APIMethodFindListResult](api_method_find_reviews.MethodFindReviews),
+		"find-comments":         api_code_http.Handle[api_method_find_comments.APIMethodFindCommentsRequest, api_types.APIMethodFindListResult](api_method_find_comments.MethodFindComments),
 		"find-msgs":             api_code_http.Handle[api_method_find_messages.APIMethodFindMessagesRequest, api_types.APIMethodFindListResult](api_method_find_messages.MethodFindMessages),
 		"sync-list":             api_code_http.Handle[api_method_sync_list.APIMethodSyncListRequest, api_method_sync_list.APIMethodSyncListResult](api_method_sync_list.MethodSyncList),
+		"sync-item":             api_code_http.Handle[api_method_sync_item.APIMethodSyncItemRequest, api_method_sync_item.APIMethodSyncItemResult](api_method_sync_item.MethodSyncItem),
 		"sync-fed":              api_code_http.Handle[api_method_sync_fed.APIMethodSyncFedRequest, api_method_sync_fed.APIMethodSyncFedResult](api_method_sync_fed.MethodSyncFed),
 		"get-fed":               api_code_http.Handle[api_method_get_fed.APIMethodGetFedRequest, api_method_get_fed.APIMethodGetFedResult](api_method_get_fed.MethodGetFed),
 	}

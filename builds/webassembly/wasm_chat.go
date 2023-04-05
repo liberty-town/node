@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	msgpack "github.com/vmihailenco/msgpack/v5"
 	"liberty-town/node/addresses"
 	"liberty-town/node/builds/webassembly/webassembly_utils"
 	"liberty-town/node/cryptography"
@@ -18,6 +17,7 @@ import (
 	"liberty-town/node/network/websocks/connection"
 	"liberty-town/node/pandora-pay/helpers"
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
+	"liberty-town/node/pandora-pay/helpers/msgpack"
 	"liberty-town/node/settings"
 	"liberty-town/node/validator/validation"
 	"syscall/js"
@@ -47,7 +47,7 @@ func chatGetConversations(this js.Value, args []js.Value) any {
 		}
 
 		count := 0
-		err := federation_network.AggregateData[api_types.APIMethodGetResult]("find-conversations", &api_method_find_conversations.APIMethodFindConversationsRequest{
+		err := federation_network.AggregateListData[api_types.APIMethodGetResult]("find-conversations", &api_method_find_conversations.APIMethodFindConversationsRequest{
 			sender.Encoded,
 			req.Start,
 		}, "get-last-msg", func(it *federation_network.AggregationListResult) (any, error) {
@@ -83,7 +83,7 @@ func chatGetConversations(this js.Value, args []js.Value) any {
 
 			return errors.New("msg invalid")
 
-		})
+		}, nil)
 
 		return count, err
 	})
@@ -164,7 +164,7 @@ func chatSendMessage(this js.Value, args []js.Value) any {
 			msg.Second = req.Receiver
 		}
 
-		if msg.Validation, err = federationValidate(f.Federation, msg.GetMessageForSigningValidator, args[1]); err != nil {
+		if msg.Validation, _, err = federationValidate(f.Federation, msg.GetMessageForSigningValidator, args[1], nil); err != nil {
 			return nil, err
 		}
 
@@ -216,7 +216,7 @@ func chatGetMessages(this js.Value, args []js.Value) any {
 		}
 
 		count := 0
-		err := federation_network.AggregateData[api_types.APIMethodGetResult]("find-msgs", &api_method_find_messages.APIMethodFindMessagesRequest{
+		err := federation_network.AggregateListData[api_types.APIMethodGetResult]("find-msgs", &api_method_find_messages.APIMethodFindMessagesRequest{
 			sender,
 			req.Receiver,
 			req.Start,
@@ -253,7 +253,7 @@ func chatGetMessages(this js.Value, args []js.Value) any {
 
 			return errors.New("msg invalid")
 
-		})
+		}, nil)
 
 		return count, err
 

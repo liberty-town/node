@@ -1,9 +1,9 @@
 package api_code_websockets
 
 import (
-	"github.com/vmihailenco/msgpack/v5"
 	"liberty-town/node/network/network_config/network_config_auth"
 	"liberty-town/node/network/websocks/connection"
+	"liberty-town/node/pandora-pay/helpers/msgpack"
 )
 
 type APILogin struct {

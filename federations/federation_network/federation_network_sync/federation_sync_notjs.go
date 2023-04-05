@@ -4,6 +4,7 @@
 package federation_network_sync
 
 import (
+	"liberty-town/node/config"
 	"liberty-town/node/federations/federation_network/sync_type"
 	"liberty-town/node/gui"
 	"liberty-town/node/network/api_implementation/api_common/api_method_sync_list"
@@ -15,7 +16,7 @@ import (
 	"time"
 )
 
-//检查更新
+// 检查更新
 func ContinuouslyDownloadFederationData() {
 
 	for i := 0; i < network_config.WEBSOCKETS_CONCURRENT_SYNC_CONNECTIONS; i++ {
@@ -25,22 +26,28 @@ func ContinuouslyDownloadFederationData() {
 
 				<-websocks.Websockets.ReadyCn.Load()
 
-				if conn := websocks.Websockets.GetRandomSocket(); conn != nil {
+				list := websocks.Websockets.GetAllSockets()
+				for _, conn := range list {
 
-					syncType := sync_type.SyncVersion(rand.Intn(int(sync_type.SYNC_REVIEWS) + 1))
-					data, err := connection.SendJSONAwaitAnswer[api_method_sync_list.APIMethodSyncListResult](conn, []byte("sync-list"), &api_method_sync_list.APIMethodSyncListRequest{
-						Type: syncType,
-					}, nil, 0)
+					if conn.Handshake.Consensus == config.NODE_CONSENSUS_TYPE_FULL {
 
-					if err != nil {
-						continue
+						syncType := sync_type.SyncVersion(rand.Intn(int(sync_type.SYNC_COMMENTS) + 1))
+						data, err := connection.SendJSONAwaitAnswer[api_method_sync_list.APIMethodSyncListResult](conn, []byte("sync-list"), &api_method_sync_list.APIMethodSyncListRequest{
+							Type: syncType,
+						}, nil, 0)
+
+						if err != nil {
+							continue
+						}
+
+						if err = ProcessSync(conn, syncType, data.Keys, data.BetterScores); err != nil {
+							gui.GUI.Info("connection was closed during syncing", err)
+							conn.Close()
+						}
+
 					}
 
-					if err = ProcessSync(conn, syncType, data.Keys, data.BetterScores); err != nil {
-						gui.GUI.Info("connection was closed during syncing", err)
-						conn.Close()
-					}
-
+					time.Sleep(1 * time.Millisecond)
 				}
 
 				time.Sleep(100 * time.Millisecond)

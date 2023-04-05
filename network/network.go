@@ -2,12 +2,12 @@ package network
 
 import (
 	"context"
-	msgpack "github.com/vmihailenco/msgpack/v5"
 	"liberty-town/node/network/connected_nodes"
 	"liberty-town/node/network/known_nodes"
 	"liberty-town/node/network/server/node_tcp"
 	"liberty-town/node/network/websocks"
 	"liberty-town/node/network/websocks/connection/advanced_connection_types"
+	"liberty-town/node/pandora-pay/helpers/msgpack"
 	"time"
 )
 
@@ -100,5 +100,7 @@ func NewNetwork() error {
 	Network = &networkType{}
 
 	Network.continuouslyConnectingNewPeers()
+	Network.continuouslyDownloadNetworkNodes()
+
 	return nil
 }

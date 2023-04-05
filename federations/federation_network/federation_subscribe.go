@@ -10,7 +10,7 @@ import (
 	"liberty-town/node/settings"
 )
 
-//检查新通知
+// 检查新通知
 func SubscribeToChat() {
 	recovery.SafeGo(func() {
 

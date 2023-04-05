@@ -7,7 +7,7 @@ const (
 )
 
 type validatorProof struct {
-	Message   []byte `json:"message"`
-	Size      uint64 `json:"size"`
-	Signature []byte `json:"signature"`
+	Message   []byte `json:"message" msgpack:"message"`
+	Size      uint64 `json:"size" msgpack:"size"`
+	Signature []byte `json:"signature" msgpack:"signature"`
 }

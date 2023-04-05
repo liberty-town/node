@@ -6,10 +6,8 @@ import (
 	"liberty-town/node/cryptography"
 	"liberty-town/node/federations/federation_serve"
 	"liberty-town/node/federations/federation_store/store_data/accounts_summaries"
-	"liberty-town/node/federations/federation_store/store_data/listings"
 	"liberty-town/node/federations/federation_store/store_data/listings/listing_type"
 	"liberty-town/node/pandora-pay/helpers"
-	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
 	"liberty-town/node/store/small_sorted_set"
 	"liberty-town/node/store/store_db/store_db_interface"
 	"liberty-town/node/store/store_utils"
@@ -56,15 +54,7 @@ func StoreAccountSummary(accountSummary *accounts_summaries.AccountSummary) erro
 			}
 
 			for _, entry := range ss.Data {
-				data := tx.Get("listings:" + entry.Key)
-				if data == nil {
-					return errors.New("listing was not found")
-				}
-				listing := &listings.Listing{}
-				if err = listing.Deserialize(advanced_buffers.NewBufferReader(data)); err != nil {
-					return err
-				}
-				if err = storeListingScore(tx, listing, false, accountSummary, nil); err != nil {
+				if err = storeListingScore(tx, entry.Key, nil, false, accountSummary, nil); err != nil {
 					return err
 				}
 			}
@@ -85,18 +75,4 @@ func StoreAccountSummary(accountSummary *accounts_summaries.AccountSummary) erro
 
 		return nil
 	})
-}
-
-func GetAccountSummary(accountIdentity string) (accountSummary []byte, err error) {
-
-	f := federation_serve.ServeFederation.Load()
-	if f == nil {
-		return nil, errors.New("not serving this federation")
-	}
-
-	err = f.Store.DB.View(func(tx store_db_interface.StoreDBTransactionInterface) error {
-		accountSummary = tx.Get("accounts_summaries:" + accountIdentity)
-		return nil
-	})
-	return
 }

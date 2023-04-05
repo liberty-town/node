@@ -20,7 +20,18 @@ import (
 	"strconv"
 )
 
-func storeListingScore(tx store_db_interface.StoreDBTransactionInterface, listing *listings.Listing, remove bool, accountSummary *accounts_summaries.AccountSummary, listingSummary *listings_summaries.ListingSummary) (err error) {
+func storeListingScore(tx store_db_interface.StoreDBTransactionInterface, listingIdentity string, listing *listings.Listing, remove bool, accountSummary *accounts_summaries.AccountSummary, listingSummary *listings_summaries.ListingSummary) (err error) {
+
+	if listing == nil {
+		data := tx.Get("listings:" + listingIdentity)
+		if len(data) == 0 {
+			return nil
+		}
+		listing = &listings.Listing{}
+		if err = listing.Deserialize(advanced_buffers.NewBufferReader(data)); err != nil {
+			return
+		}
+	}
 
 	var score float64
 
@@ -48,41 +59,24 @@ func storeListingScore(tx store_db_interface.StoreDBTransactionInterface, listin
 		score = listings.GetScore(listingSummaryScore, accountSummaryScore)
 	}
 
-	process := func(name string) (err error) {
-		ss := small_sorted_set.NewSmallSortedSet(config.LIST_SIZE, name, tx)
-		if err = ss.Read(); err != nil {
-			return
-		}
-		if len(ss.Data) >= config.LIST_SIZE-1 {
-			return errors.New("publisher has way to many listings")
-		}
-		if remove {
-			ss.Delete(listing.Identity.Encoded)
-		} else {
-			ss.Add(listing.Identity.Encoded, score)
-		}
-		ss.Save()
-		return
-	}
-
-	if err = process("listings_by_publisher:" + string(listing.Type) + ":" + string(cryptography.SHA3([]byte(listing.Publisher.Address.Encoded)))); err != nil {
+	if err = storeSortedSet("listings_by_publisher:"+string(listing.Type)+":"+string(cryptography.SHA3([]byte(listing.Publisher.Address.Encoded))), listing.Identity.Encoded, score, remove, tx); err != nil {
 		return
 	}
 
 	for _, category := range listing.Categories {
-		if err = process("listings_by_categories:" + string(listing.Type) + ":" + string(cryptography.SHA3([]byte(strconv.FormatUint(category, 10))))); err != nil {
+		if err = storeSortedSet("listings_by_categories:"+string(listing.Type)+":"+string(cryptography.SHA3([]byte(strconv.FormatUint(category, 10)))), listing.Identity.Encoded, score, remove, tx); err != nil {
 			return
 		}
 	}
 
 	words := listing.GetWords()
 	for _, word := range words {
-		if err = process("listings_by_name:" + string(listing.Type) + ":" + string(cryptography.SHA3([]byte(word)))); err != nil {
+		if err = storeSortedSet("listings_by_name:"+string(listing.Type)+":"+string(cryptography.SHA3([]byte(word))), listing.Identity.Encoded, score, remove, tx); err != nil {
 			return
 		}
 	}
 
-	if err = process("listings_all:" + string(listing.Type)); err != nil {
+	if err = storeSortedSet("listings_all:"+string(listing.Type), listing.Identity.Encoded, score, remove, tx); err != nil {
 		return
 	}
 
@@ -117,12 +111,7 @@ func StoreListing(listing *listings.Listing) error {
 			return errors.New("data is older")
 		}
 		if score > 0 {
-			data := tx.Get("listings:" + listing.Ownership.Address.Encoded)
-			old := &listings.Listing{}
-			if err = old.Deserialize(advanced_buffers.NewBufferReader(data)); err != nil {
-				return
-			}
-			if err = storeListingScore(tx, old, true, nil, nil); err != nil {
+			if err = storeListingScore(tx, listing.Identity.Encoded, nil, true, nil, nil); err != nil {
 				return
 			}
 		}
@@ -134,7 +123,7 @@ func StoreListing(listing *listings.Listing) error {
 			return
 		}
 
-		if err = storeListingScore(tx, listing, false, nil, nil); err != nil {
+		if err = storeListingScore(tx, listing.Identity.Encoded, listing, false, nil, nil); err != nil {
 			return
 		}
 
@@ -164,7 +153,7 @@ func RemoveListing(federationIdentity, listingIdentity string) error {
 		tx.Delete("listings_publishers:" + listingIdentity)
 		tx.Delete("listings_summaries:" + listingIdentity)
 
-		if err = storeListingScore(tx, listing, true, nil, nil); err != nil {
+		if err = storeListingScore(tx, listing.Identity.Encoded, listing, true, nil, nil); err != nil {
 			return
 		}
 
@@ -177,20 +166,6 @@ func RemoveListing(federationIdentity, listingIdentity string) error {
 
 		return
 	})
-}
-
-func GetListing(listingIdentity string) (listing []byte, err error) {
-
-	f := federation_serve.ServeFederation.Load()
-	if f == nil {
-		return nil, errors.New("not serving this federation")
-	}
-
-	err = f.Store.DB.View(func(tx store_db_interface.StoreDBTransactionInterface) error {
-		listing = tx.Get("listings:" + listingIdentity)
-		return nil
-	})
-	return
 }
 
 func GetListingData(listingIdentity string) (listing, accountSummary, listingSummary []byte, err error) {
@@ -290,28 +265,5 @@ func SearchListings(queries []string, listingType listing_type.ListingType, quer
 }
 
 func GetListings(account *addresses.Address, listingType listing_type.ListingType, start int) (list []*api_types.APIMethodFindListItem, err error) {
-
-	f := federation_serve.ServeFederation.Load()
-	if f == nil {
-		return nil, errors.New("not serving this federation")
-	}
-
-	err = f.Store.DB.View(func(tx store_db_interface.StoreDBTransactionInterface) error {
-
-		ss := small_sorted_set.NewSmallSortedSet(config.LIST_SIZE, "listings_by_publisher:"+string(listingType)+":"+string(cryptography.SHA3([]byte(account.Encoded))), tx)
-		if err = ss.Read(); err != nil {
-			return err
-		}
-
-		for i := start; i < len(ss.Data) && len(list) < config.LISTINGS_LIST_COUNT; i++ {
-			result := ss.Data[i]
-			list = append(list, &api_types.APIMethodFindListItem{
-				result.Key,
-				result.Score,
-			})
-		}
-
-		return nil
-	})
-	return
+	return FindData("listings_by_publisher:"+string(listingType)+":"+string(cryptography.SHA3([]byte(account.Encoded))), start, config.LISTINGS_LIST_COUNT)
 }

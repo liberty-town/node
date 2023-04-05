@@ -90,7 +90,7 @@ func (this *ChatMessage) Deserialize(r *advanced_buffers.BufferReader) (err erro
 	}
 
 	this.Validation = &validation.Validation{}
-	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator); err != nil {
+	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator, nil); err != nil {
 		return
 	}
 
@@ -143,7 +143,7 @@ func (this *ChatMessage) Validate() error {
 }
 
 func (this *ChatMessage) ValidateSignatures() error {
-	if !this.Validation.Verify(this.GetMessageForSigningValidator) {
+	if !this.Validation.Verify(this.GetMessageForSigningValidator, nil) {
 		return errors.New("ACCOUNT VALIDATION FAILED")
 	}
 	return nil

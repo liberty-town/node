@@ -12,15 +12,15 @@ import (
 
 func MethodGetAccount(r *http.Request, args *api_types.APIMethodGetRequest, reply *api_types.APIMethodGetResult) error {
 
-	account, err := federation_store.GetAccount(args.Identity)
+	found, err := federation_store.GetData("accounts:", args.Identity)
 	if err != nil {
 		return err
 	}
 
-	if account == nil {
+	if found == nil {
 		return errors.New("not found")
 	}
 
-	reply.Result = account
+	reply.Result = found
 	return nil
 }

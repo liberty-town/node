@@ -23,13 +23,24 @@ type Address struct {
 }
 
 func newAddr(network uint64, version AddressVersion, publicKey []byte) (*Address, error) {
-	if len(publicKey) != cryptography.PublicKeySize {
-		return nil, errors.New("Invalid PublicKey size")
-	}
 
-	ecdsaPublicKey, err := cryptography.DecompressPubkey(publicKey)
-	if err != nil {
-		return nil, err
+	var ecdsaPublicKey *ecdsa.PublicKey
+	var err error
+
+	switch version {
+	case SIMPLE_PUBLIC_KEY:
+		if len(publicKey) != cryptography.PublicKeySize {
+			return nil, errors.New("Invalid PublicKey size")
+		}
+		if ecdsaPublicKey, err = cryptography.DecompressPubkey(publicKey); err != nil {
+			return nil, err
+		}
+	case SIMPLE_HASH:
+		if len(publicKey) != cryptography.HashSize {
+			return nil, errors.New("invalid hash size")
+		}
+	default:
+		return nil, errors.New("invalid version")
 	}
 
 	a := &Address{network, version, publicKey, "", ecdsaPublicKey}
@@ -38,7 +49,11 @@ func newAddr(network uint64, version AddressVersion, publicKey []byte) (*Address
 }
 
 func CreateAddr(publicKey []byte) (*Address, error) {
-	return newAddr(config.NETWORK_SELECTED, SIMPLE_PUBLIC_KEY, publicKey)
+	if len(publicKey) == cryptography.PublicKeySize {
+		return newAddr(config.NETWORK_SELECTED, SIMPLE_PUBLIC_KEY, publicKey)
+	} else {
+		return newAddr(config.NETWORK_SELECTED, SIMPLE_HASH, publicKey)
+	}
 }
 
 func CreateAddrFromSignature(message, signature []byte) (*Address, error) {
@@ -139,21 +154,31 @@ func DecodeAddr(input string) (*Address, error) {
 		if addr.ecdsaPublicKey, err = cryptography.DecompressPubkey(addr.PublicKey); err != nil {
 			return nil, err
 		}
-
-		addr.Encoded = input
+	case SIMPLE_HASH:
+		if addr.PublicKey, err = reader.ReadBytes(cryptography.HashSize); err != nil {
+			return nil, err
+		}
 	default:
 		return nil, errors.New("Invalid Address Version")
 	}
+
+	addr.Encoded = input
 
 	return addr, nil
 }
 
 func (a *Address) EncryptMessage(message []byte) ([]byte, error) {
+	if a.Version != SIMPLE_PUBLIC_KEY {
+		return nil, errors.New("can't encrypt messages")
+	}
 	return ecies.Encrypt(rand.Reader, ecies.ImportECDSAPublic(a.ecdsaPublicKey), message, nil, nil)
 }
 
-//need hash
+// need hash
 func (a *Address) VerifySignedMessage(message, signature []byte) bool {
+	if a.Version != SIMPLE_PUBLIC_KEY {
+		return false
+	}
 	return cryptography.VerifySignature(a.PublicKey, cryptography.SHA3(message), signature)
 }
 
@@ -183,6 +208,10 @@ func (a *Address) Deserialize(r *advanced_buffers.BufferReader) (err error) {
 			return
 		}
 		if a.ecdsaPublicKey, err = cryptography.DecompressPubkey(a.PublicKey); err != nil {
+			return
+		}
+	case SIMPLE_HASH:
+		if a.PublicKey, err = r.ReadBytes(cryptography.HashSize); err != nil {
 			return
 		}
 	default:

@@ -8,8 +8,8 @@ import (
 )
 
 type Offer struct {
-	Amount string `json:"amount"`
-	Price  uint64 `json:"price"`
+	Amount string `json:"amount" msgpack:"amount"`
+	Price  uint64 `json:"price" msgpack:"price"`
 }
 
 func (this *Offer) Serialize(w *advanced_buffers.BufferWriter) {

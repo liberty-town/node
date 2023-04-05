@@ -10,17 +10,17 @@ import (
 )
 
 type AccountSummary struct {
-	Version            AccountSummaryVersion  `json:"version"`
-	FederationIdentity *addresses.Address     `json:"federationIdentity"`
-	AccountIdentity    *addresses.Address     `json:"accountIdentity"`
-	SalesTotal         uint64                 `json:"salesTotal"`
-	SalesCount         uint64                 `json:"salesCount"`
-	SalesAmount        uint64                 `json:"salesAmount"`
-	PurchasesTotal     uint64                 `json:"purchasesTotal"`
-	PurchasesCount     uint64                 `json:"purchasesCount"`
-	PurchasesAmount    uint64                 `json:"purchasesAmount"`
-	Validation         *validation.Validation `json:"validation"`
-	Signer             *ownership.Ownership   `json:"signer"`
+	Version            AccountSummaryVersion  `json:"version" msgpack:""`
+	FederationIdentity *addresses.Address     `json:"federation" msgpack:"federation"`
+	AccountIdentity    *addresses.Address     `json:"account" msgpack:"account"`
+	SalesTotal         uint64                 `json:"salesTotal" msgpack:"salesTotal"`
+	SalesCount         uint64                 `json:"salesCount" msgpack:"salesCount"`
+	SalesAmount        uint64                 `json:"salesAmount" msgpack:"salesAmount"`
+	PurchasesTotal     uint64                 `json:"purchasesTotal" msgpack:"purchasesTotal"`
+	PurchasesCount     uint64                 `json:"purchasesCount" msgpack:"purchasesCount"`
+	PurchasesAmount    uint64                 `json:"purchasesAmount" msgpack:"purchasesAmount"`
+	Validation         *validation.Validation `json:"validation" msgpack:"validation"`
+	Signer             *ownership.Ownership   `json:"signer" msgpack:"signer"`
 }
 
 func (this *AccountSummary) AdvancedSerialize(w *advanced_buffers.BufferWriter, includeValidation, includeOwnership, includeOwnershipSignature bool) {
@@ -96,7 +96,7 @@ func (this *AccountSummary) Deserialize(r *advanced_buffers.BufferReader) (err e
 	}
 
 	this.Validation = &validation.Validation{}
-	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator); err != nil {
+	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator, nil); err != nil {
 		return
 	}
 
@@ -144,7 +144,7 @@ func (this *AccountSummary) GetMessageForSigningSigner() []byte {
 }
 
 func (this *AccountSummary) ValidateSignatures() error {
-	if !this.Validation.Verify(this.GetMessageForSigningValidator) {
+	if !this.Validation.Verify(this.GetMessageForSigningValidator, nil) {
 		return errors.New("ACCOUNT SUMMARY VALIDATION FAILED")
 	}
 	if !this.Signer.Verify(this.GetMessageForSigningSigner) {

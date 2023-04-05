@@ -7,8 +7,8 @@ import (
 )
 
 type Shipping struct {
-	Option string `json:"option"`
-	Price  uint64 `json:"price"`
+	Option string `json:"option" msgpack:"option"`
+	Price  uint64 `json:"price" msgpack:"option"`
 }
 
 func (this *Shipping) Serialize(w *advanced_buffers.BufferWriter) {

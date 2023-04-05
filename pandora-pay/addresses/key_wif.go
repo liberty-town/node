@@ -8,7 +8,7 @@ import (
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
 )
 
-//omitempty because of non-wif version
+// omitempty because of non-wif version
 type KeyWIF struct {
 	Version  PrivateKeyVersion `json:"version,omitempty" msgpack:"version,omitempty"`
 	Network  uint64            `json:"network,omitempty" msgpack:"network,omitempty"` //replay protection from one network to another one

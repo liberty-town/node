@@ -44,17 +44,3 @@ func StoreAccount(account *accounts.Account) error {
 		return
 	})
 }
-
-func GetAccount(accountIdentity string) (account []byte, err error) {
-
-	f := federation_serve.ServeFederation.Load()
-	if f == nil {
-		return nil, errors.New("not serving this federation")
-	}
-
-	err = f.Store.DB.View(func(tx store_db_interface.StoreDBTransactionInterface) error {
-		account = tx.Get("accounts:" + accountIdentity)
-		return nil
-	})
-	return
-}

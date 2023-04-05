@@ -1,16 +1,39 @@
 package network
 
 import (
+	"liberty-town/node/config"
 	"liberty-town/node/gui"
 	"liberty-town/node/network/banned_nodes"
 	"liberty-town/node/network/connected_nodes"
 	"liberty-town/node/network/known_nodes"
 	"liberty-town/node/network/known_nodes/known_node"
+	"liberty-town/node/network/known_nodes_sync"
 	"liberty-town/node/network/network_config"
 	"liberty-town/node/network/websocks"
 	"liberty-town/node/pandora-pay/helpers/recovery"
 	"time"
 )
+
+func (this *networkType) continuouslyDownloadNetworkNodes() {
+
+	recovery.SafeGo(func() {
+
+		for {
+
+			list := websocks.Websockets.GetAllSockets()
+			for _, conn := range list {
+				if conn.Handshake.Consensus == config.NODE_CONSENSUS_TYPE_FULL {
+					known_nodes_sync.KnownNodesSync.DownloadNetworkNodes(conn)
+				}
+				time.Sleep(1 * time.Millisecond)
+			}
+
+			time.Sleep(10000 * time.Millisecond)
+		}
+
+	})
+
+}
 
 func (network *networkType) continuouslyConnectingNewPeers() {
 

@@ -1,0 +1,7 @@
+package config
+
+const (
+	COMMENT_CONTENT_MAX_LENGTH = 4 * 1024
+	COMMENT_CONTENT_MIN_LENGTH = 3
+	COMMENTS_LIST_COUNT        = 20
+)

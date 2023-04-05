@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-//检查新更新
+// 检查新更新
 func ContinuouslyDownloadFederation() {
 
 	serveFed := federation_serve.ServeFederation.Load().Federation
@@ -38,7 +38,8 @@ func ContinuouslyDownloadFederation() {
 				continue
 			}
 
-			if conn := websocks.Websockets.GetRandomSocket(); conn != nil {
+			list := websocks.Websockets.GetAllSockets()
+			for _, conn := range list {
 
 				data, err := connection.SendJSONAwaitAnswer[api_method_sync_fed.APIMethodSyncFedResult](conn, []byte("sync-fed"), &api_method_sync_fed.APIMethodSyncFedRequest{}, nil, 0)
 				if err != nil {
@@ -89,9 +90,11 @@ func ContinuouslyDownloadFederation() {
 
 				}
 
+				time.Sleep(1 * time.Millisecond)
 			}
 
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
+
 		}
 	})
 }

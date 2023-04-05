@@ -7,7 +7,7 @@ import (
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
 )
 
-//卖家信息
+// 卖家信息
 type InvoiceSellerAccount struct {
 	Address   *addresses.Address `json:"address" msgpack:"address"`
 	Nonce     []byte             `json:"nonce" msgpack:"nonce"`

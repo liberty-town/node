@@ -1,9 +1,9 @@
 package api_code_websockets
 
 import (
-	msgpack "github.com/vmihailenco/msgpack/v5"
 	"liberty-town/node/network/api_code/api_code_types"
 	"liberty-town/node/network/websocks/connection"
+	"liberty-town/node/pandora-pay/helpers/msgpack"
 	"liberty-town/node/pandora-pay/helpers/multicast"
 	"net/http"
 )

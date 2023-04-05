@@ -12,15 +12,15 @@ import (
 
 func MethodGetReview(r *http.Request, args *api_types.APIMethodGetRequest, reply *api_types.APIMethodGetResult) error {
 
-	review, err := federation_store.GetReview(args.Identity)
+	found, err := federation_store.GetData("reviews:", args.Identity)
 	if err != nil {
 		return err
 	}
 
-	if len(review) == 0 {
+	if len(found) == 0 {
 		return errors.New("not found")
 	}
 
-	reply.Result = review
+	reply.Result = found
 	return nil
 }

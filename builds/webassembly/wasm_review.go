@@ -75,7 +75,7 @@ func reviewStore(this js.Value, args []js.Value) any {
 			&ownership.Ownership{},
 		}
 
-		if it.Validation, err = federationValidate(f.Federation, it.GetMessageForSigningValidator, args[1]); err != nil {
+		if it.Validation, _, err = federationValidate(f.Federation, it.GetMessageForSigningValidator, args[1], nil); err != nil {
 			return nil, err
 		}
 
@@ -137,7 +137,7 @@ func reviewsGetAll(this js.Value, args []js.Value) any {
 		}
 
 		count := 0
-		err := federation_network.AggregateData[api_types.APIMethodGetResult]("find-reviews", &api_method_find_reviews.APIMethodFindReviewsRequest{
+		err := federation_network.AggregateListData[api_types.APIMethodGetResult]("find-reviews", &api_method_find_reviews.APIMethodFindReviewsRequest{
 			req.Identity,
 			req.Type,
 			req.Start,
@@ -180,7 +180,7 @@ func reviewsGetAll(this js.Value, args []js.Value) any {
 
 			count++
 			return nil
-		})
+		}, nil)
 
 		return count, err
 	})

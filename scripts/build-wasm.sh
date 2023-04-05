@@ -44,12 +44,14 @@ buildOutput+=".wasm"
 
 go version
 (cd ${src} && GOOS=js GOARCH=wasm go build  -ldflags="-s -w" -o ${buildOutput} )
+#( cd ${src} && tinygo build -o ${buildOutput}  -target wasm -size full  -no-debug -gc=leaking )
 
 buildOutput=${src}${buildOutput}
 
 finalOutput=${frontend}
 
 cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" "${finalOutput}src/webworkers/dist/wasm_exec.js"
+#cp "/usr/local/lib/tinygo/targets/wasm_exec.js" "${finalOutput}src/webworkers/dist/wasm_exec.js"
 
 finalOutput+="dist/"
 

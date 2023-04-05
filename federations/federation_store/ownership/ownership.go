@@ -8,9 +8,9 @@ import (
 )
 
 type Ownership struct {
-	Timestamp uint64             `json:"timestamp"`
-	Signature []byte             `json:"signature"`
-	Address   *addresses.Address `json:"address"`
+	Timestamp uint64             `json:"timestamp" msgpack:"timestamp"`
+	Signature []byte             `json:"signature" msgpack:"signature"`
+	Address   *addresses.Address `json:"address" msgpack:"address"`
 }
 
 func (this *Ownership) AdvancedSerialize(w *advanced_buffers.BufferWriter, includeSignature bool) {

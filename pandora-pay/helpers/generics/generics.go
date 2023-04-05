@@ -1,8 +1,8 @@
 package generics
 
 import (
-	msgpack "github.com/vmihailenco/msgpack/v5"
 	"golang.org/x/exp/constraints"
+	"liberty-town/node/pandora-pay/helpers/msgpack"
 )
 
 // usage: Zero(T)()

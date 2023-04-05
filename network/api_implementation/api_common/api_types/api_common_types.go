@@ -1,5 +1,7 @@
 package api_types
 
+import "liberty-town/node/addresses"
+
 type APIMethodGetRequest struct {
 	Identity string `json:"identity" msgpack:"identity"`
 }
@@ -10,6 +12,11 @@ type APIMethodGetResult struct {
 
 type APIMethodStoreRequest struct {
 	Data []byte `json:"data" msgpack:"data"`
+}
+
+type APIMethodStoreIdentityRequest struct {
+	Identity *addresses.Address `json:"identity" msgpack:"identity"`
+	Data     []byte             `json:"data" msgpack:"data"`
 }
 
 type APIMethodStoreResult struct {

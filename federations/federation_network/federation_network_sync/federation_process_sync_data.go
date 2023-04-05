@@ -1,14 +1,18 @@
 package federation_network_sync
 
 import (
+	"liberty-town/node/addresses"
 	"liberty-town/node/federations/chat/chat_message"
 	"liberty-town/node/federations/federation_network/sync_type"
 	"liberty-town/node/federations/federation_store"
 	"liberty-town/node/federations/federation_store/store_data/accounts"
 	"liberty-town/node/federations/federation_store/store_data/accounts_summaries"
+	"liberty-town/node/federations/federation_store/store_data/comments"
 	"liberty-town/node/federations/federation_store/store_data/listings"
 	"liberty-town/node/federations/federation_store/store_data/listings_summaries"
+	"liberty-town/node/federations/federation_store/store_data/polls"
 	"liberty-town/node/federations/federation_store/store_data/reviews"
+	"liberty-town/node/federations/federation_store/store_data/threads"
 	"liberty-town/node/network/api_implementation/api_common/api_types"
 	"liberty-town/node/network/websocks/connection"
 	"liberty-town/node/pandora-pay/helpers"
@@ -25,6 +29,15 @@ func ProcessSync(conn *connection.AdvancedConnection, syncType sync_type.SyncVer
 	if len(download) > 0 {
 
 		for i := range download {
+
+			var addr *addresses.Address
+			switch syncType {
+			case sync_type.SYNC_COMMENTS, sync_type.SYNC_POLLS:
+				if addr, err = addresses.DecodeAddr(download[i]); err != nil {
+					return err
+				}
+
+			}
 
 			var command string
 			var result helpers.SerializableInterface
@@ -47,6 +60,23 @@ func ProcessSync(conn *connection.AdvancedConnection, syncType sync_type.SyncVer
 			case sync_type.SYNC_REVIEWS:
 				command = "get-review"
 				result = &reviews.Review{}
+			case sync_type.SYNC_THREADS:
+				command = "get-thread"
+				result = &threads.Thread{
+					FederationIdentity: conn.Handshake.Federation,
+				}
+			case sync_type.SYNC_COMMENTS:
+				command = "get-comment"
+				result = &comments.Comment{
+					FederationIdentity: conn.Handshake.Federation,
+					ParentIdentity:     addr,
+				}
+			case sync_type.SYNC_POLLS:
+				command = "get-poll"
+				result = &polls.Poll{
+					FederationIdentity: conn.Handshake.Federation,
+					Identity:           addr,
+				}
 			default:
 				return nil
 			}
@@ -76,6 +106,12 @@ func ProcessSync(conn *connection.AdvancedConnection, syncType sync_type.SyncVer
 				return federation_store.StoreChatMessage(result.(*chat_message.ChatMessage))
 			case sync_type.SYNC_REVIEWS:
 				return federation_store.StoreReview(result.(*reviews.Review))
+			case sync_type.SYNC_THREADS:
+				return federation_store.StoreThread(result.(*threads.Thread))
+			case sync_type.SYNC_COMMENTS:
+				return federation_store.StoreComments(result.(*comments.Comment))
+			case sync_type.SYNC_POLLS:
+				return federation_store.StorePoll(result.(*polls.Poll))
 			default:
 				return nil
 			}

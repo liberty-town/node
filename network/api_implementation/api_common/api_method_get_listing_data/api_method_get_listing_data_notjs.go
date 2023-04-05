@@ -12,16 +12,16 @@ import (
 
 func MethodGetListingData(r *http.Request, args *api_types.APIMethodGetRequest, reply *APIMethodGetListingDataReply) error {
 
-	listing, accountSummary, listingSummary, err := federation_store.GetListingData(args.Identity)
+	found, accountSummary, listingSummary, err := federation_store.GetListingData(args.Identity)
 	if err != nil {
 		return err
 	}
 
-	if len(listing) == 0 {
+	if len(found) == 0 {
 		return errors.New("not found")
 	}
 
-	reply.Listing = listing
+	reply.Listing = found
 	reply.AccountSummary = accountSummary
 	reply.ListingSummary = listingSummary
 

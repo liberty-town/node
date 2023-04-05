@@ -17,24 +17,24 @@ import (
 )
 
 type Listing struct {
-	Version            ListingVersion           `json:"version"`
-	FederationIdentity *addresses.Address       `json:"federationIdentity"`
-	Nonce              []byte                   `json:"nonce"`
-	Identity           *addresses.Address       `json:"identity"`
-	Type               listing_type.ListingType `json:"type"`
-	Title              string                   `json:"title"`
-	Description        string                   `json:"description"`
-	Categories         []uint64                 `json:"categories"`
-	Images             []string                 `json:"images"`
-	QuantityUnlimited  bool                     `json:"quantityUnlimited"`
-	QuantityAvailable  uint64                   `json:"quantityAvailable"`
-	ShipsFrom          uint64                   `json:"shipsFrom"`
-	ShipsTo            []uint64                 `json:"shipsTo"`
-	Offers             []*offer.Offer           `json:"offers"`
-	Shipping           []*shipping.Shipping     `json:"shipping"`
-	Validation         *validation.Validation   `json:"validation"`
-	Publisher          *ownership.Ownership     `json:"publisher"`
-	Ownership          *ownership.Ownership     `json:"ownership"`
+	Version            ListingVersion           `json:"version" msgpack:"version"`
+	FederationIdentity *addresses.Address       `json:"federation" msgpack:"federation"`
+	Nonce              []byte                   `json:"nonce" msgpack:"nonce"`
+	Identity           *addresses.Address       `json:"identity" msgpack:"identity"`
+	Type               listing_type.ListingType `json:"type" msgpack:"type"`
+	Title              string                   `json:"title" msgpack:"title"`
+	Description        string                   `json:"description" msgpack:"description"`
+	Categories         []uint64                 `json:"categories" msgpack:"categories"`
+	Images             []string                 `json:"images" msgpack:"images"`
+	QuantityUnlimited  bool                     `json:"quantityUnlimited" msgpack:"quantityUnlimited"`
+	QuantityAvailable  uint64                   `json:"quantityAvailable" msgpack:"quantityAvailable"`
+	ShipsFrom          uint64                   `json:"shipsFrom" msgpack:"shipsFrom"`
+	ShipsTo            []uint64                 `json:"shipsTo" msgpack:"shipsTo"`
+	Offers             []*offer.Offer           `json:"offers" msgpack:"offers"`
+	Shipping           []*shipping.Shipping     `json:"shipping"  msgpack:"shipping"`
+	Validation         *validation.Validation   `json:"validation" msgpack:"validation"`
+	Publisher          *ownership.Ownership     `json:"publisher" msgpack:"publisher"`
+	Ownership          *ownership.Ownership     `json:"ownership" msgpack:"ownership"`
 }
 
 func (this *Listing) AdvancedSerialize(w *advanced_buffers.BufferWriter, includeValidation, includePublisher, includePublisherSignature bool, includeOwnership, includeOwnershipSignature bool) {
@@ -238,7 +238,7 @@ func (this *Listing) Deserialize(r *advanced_buffers.BufferReader) (err error) {
 	}
 
 	this.Validation = &validation.Validation{}
-	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator); err != nil {
+	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator, nil); err != nil {
 		return
 	}
 
@@ -380,7 +380,7 @@ func (this *Listing) Validate() error {
 }
 
 func (this *Listing) ValidateSignatures() error {
-	if !this.Validation.Verify(this.GetMessageForSigningValidator) {
+	if !this.Validation.Verify(this.GetMessageForSigningValidator, nil) {
 		return errors.New("listing validation signature failed")
 	}
 	if !this.Publisher.Verify(this.GetMessageForSigningPublisher) {

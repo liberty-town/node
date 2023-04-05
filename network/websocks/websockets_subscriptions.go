@@ -1,7 +1,6 @@
 package websocks
 
 import (
-	msgpack "github.com/vmihailenco/msgpack/v5"
 	"liberty-town/node/federations/federation_notifications"
 	"liberty-town/node/network/api_code/api_code_types"
 	"liberty-town/node/network/api_implementation/api_common/api_types"
@@ -9,6 +8,7 @@ import (
 	"liberty-town/node/network/websocks/connection"
 	"liberty-town/node/network/websocks/connection/advanced_connection_types"
 	"liberty-town/node/pandora-pay/helpers"
+	"liberty-town/node/pandora-pay/helpers/msgpack"
 	"liberty-town/node/pandora-pay/helpers/recovery"
 )
 

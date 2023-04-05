@@ -1,10 +1,10 @@
 package api_method_sync_notification
 
 import (
-	msgpack "github.com/vmihailenco/msgpack/v5"
 	"liberty-town/node/federations/federation_network/federation_network_sync"
 	"liberty-town/node/federations/federation_network/sync_type"
 	"liberty-town/node/network/websocks/connection"
+	"liberty-town/node/pandora-pay/helpers/msgpack"
 )
 
 type APIMethodSyncNotificationRequest struct {

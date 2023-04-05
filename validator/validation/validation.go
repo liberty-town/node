@@ -9,11 +9,11 @@ import (
 )
 
 type Validation struct {
-	Version   validation_type.ValidationVersion `json:"version"`
-	Nonce     []byte                            `json:"nonce"`
-	Timestamp uint64                            `json:"timestamp"`
-	Signature []byte                            `json:"signature"`
-	Address   *addresses.Address                `json:"address"`
+	Version   validation_type.ValidationVersion `json:"version" msgpack:"version"`
+	Nonce     []byte                            `json:"nonce" msgpack:"nonce"`
+	Timestamp uint64                            `json:"timestamp" msgpack:"timestamp"`
+	Signature []byte                            `json:"signature" msgpack:"signature"`
+	Address   *addresses.Address                `json:"address" msgpack:"address"`
 }
 
 func (this *Validation) Serialize(w *advanced_buffers.BufferWriter) {
@@ -31,7 +31,7 @@ func (this *Validation) SerializeToBytes() []byte {
 	return w.Bytes()
 }
 
-func (this *Validation) Deserialize(r *advanced_buffers.BufferReader, getMessage func() []byte) (err error) {
+func (this *Validation) Deserialize(r *advanced_buffers.BufferReader, getMessage, getExtraInfo func() []byte) (err error) {
 	var n uint64
 	if n, err = r.ReadUvarint(); err != nil {
 		return
@@ -48,18 +48,21 @@ func (this *Validation) Deserialize(r *advanced_buffers.BufferReader, getMessage
 		if this.Signature, err = r.ReadBytes(cryptography.SignatureSize); err != nil {
 			return
 		}
-		if this.Address, err = addresses.CreateAddrFromSignature(this.GetMessageToValidator(getMessage), this.Signature); err != nil {
+		if this.Address, err = addresses.CreateAddrFromSignature(this.GetMessageToValidator(getMessage, getExtraInfo), this.Signature); err != nil {
 			return
 		}
 	}
 	return
 }
 
-func (this *Validation) GetMessageToValidator(getMessage func() []byte) []byte {
+func (this *Validation) GetMessageToValidator(getMessage, getExtraInfo func() []byte) []byte {
 	message := getMessage()
 
 	w := advanced_buffers.NewBufferWriter()
 	w.WriteUvarint(uint64(this.Version))
+	if getExtraInfo != nil {
+		w.Write(getExtraInfo())
+	}
 	w.Write(cryptography.SHA3(message))
 	w.WriteUvarint(uint64(len(message)))
 	w.Write(this.Nonce)
@@ -67,14 +70,14 @@ func (this *Validation) GetMessageToValidator(getMessage func() []byte) []byte {
 	return w.Bytes()
 }
 
-func (this *Validation) Verify(getMessage func() []byte) bool {
+func (this *Validation) Verify(getMessage, getExtraInfo func() []byte) bool {
 	if this == nil {
 		return false
 	}
 
 	switch this.Version {
 	case validation_type.VALIDATION_VERSION_V0:
-		return this.Address.VerifySignedMessage(this.GetMessageToValidator(getMessage), this.Signature[0:64])
+		return this.Address.VerifySignedMessage(this.GetMessageToValidator(getMessage, getExtraInfo), this.Signature[0:64])
 	default:
 		return false
 	}

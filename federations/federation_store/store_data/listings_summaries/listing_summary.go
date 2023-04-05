@@ -9,14 +9,14 @@ import (
 )
 
 type ListingSummary struct {
-	Version            ListingSummaryVersion  `json:"version"`
-	FederationIdentity *addresses.Address     `json:"federationIdentity"`
-	ListingIdentity    *addresses.Address     `json:"listingIdentity"`
-	Total              uint64                 `json:"total"`
-	Count              uint64                 `json:"count"`
-	Amount             uint64                 `json:"amount"`
-	Validation         *validation.Validation `json:"validation"`
-	Signer             *ownership.Ownership   `json:"signer"`
+	Version            ListingSummaryVersion  `json:"version" msgpack:"version"`
+	FederationIdentity *addresses.Address     `json:"federation" msgpack:"federation"`
+	ListingIdentity    *addresses.Address     `json:"listing" msgpack:"listing"`
+	Total              uint64                 `json:"total" msgpack:"total"`
+	Count              uint64                 `json:"count" msgpack:"count"`
+	Amount             uint64                 `json:"amount" msgpack:"amount"`
+	Validation         *validation.Validation `json:"validation" msgpack:"validation"`
+	Signer             *ownership.Ownership   `json:"signer" msgpack:"signer"`
 }
 
 func (this *ListingSummary) AdvancedSerialize(w *advanced_buffers.BufferWriter, includeValidation, includeOwnership, includeOwnershipSignature bool) {
@@ -78,7 +78,7 @@ func (this *ListingSummary) Deserialize(r *advanced_buffers.BufferReader) (err e
 	}
 
 	this.Validation = &validation.Validation{}
-	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator); err != nil {
+	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator, nil); err != nil {
 		return
 	}
 
@@ -126,7 +126,7 @@ func (this *ListingSummary) GetMessageForSigningSigner() []byte {
 }
 
 func (this *ListingSummary) ValidateSignatures() error {
-	if !this.Validation.Verify(this.GetMessageForSigningValidator) {
+	if !this.Validation.Verify(this.GetMessageForSigningValidator, nil) {
 		return errors.New("LISTING SUMMARY VALIDATION FAILED")
 	}
 	if !this.Signer.Verify(this.GetMessageForSigningSigner) {

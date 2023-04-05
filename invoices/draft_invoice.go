@@ -14,7 +14,7 @@ import (
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
 )
 
-//发票明细
+// 发票明细
 type Invoice struct {
 	Version    InvoiceVersion        `json:"version" msgpack:"version"`
 	Federation *addresses.Address    `json:"federation" msgpack:"federation"`

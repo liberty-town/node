@@ -66,7 +66,7 @@ func main() {
 	}
 
 	for _, it := range list {
-		data, err := federation_store.GetListing(it)
+		data, err := federation_store.GetData("listings:", it)
 		if err != nil {
 			panic(err)
 		}
@@ -85,7 +85,7 @@ func main() {
 	}
 
 	for _, it := range list {
-		data, err := federation_store.GetListingSummary(it)
+		data, err := federation_store.GetData("listings_summaries:", it)
 		if err != nil {
 			panic(err)
 		}
@@ -123,7 +123,7 @@ func main() {
 	}
 
 	for _, it := range list {
-		data, err := federation_store.GetChatMessage(it)
+		data, err := federation_store.GetData("messages:", it)
 		if err != nil {
 			panic(err)
 		}
@@ -142,7 +142,7 @@ func main() {
 	}
 
 	for _, it := range list {
-		data, err := federation_store.GetReview(it)
+		data, err := federation_store.GetData("reviews:", it)
 		if err != nil {
 			panic(err)
 		}

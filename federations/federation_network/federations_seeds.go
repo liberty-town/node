@@ -15,6 +15,7 @@ func setSeeds(fed *federation.Federation) {
 }
 
 func ConnectFederationSeeds() {
+
 	recovery.SafeGo(func() {
 
 		changedCn := federation_serve.ServeFederationChangedMulticast.AddListener()

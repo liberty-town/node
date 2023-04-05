@@ -48,7 +48,7 @@ func accountStore(this js.Value, args []js.Value) any {
 			&ownership.Ownership{},
 		}
 
-		if it.Validation, err = federationValidate(f.Federation, it.GetMessageForSigningValidator, args[1]); err != nil {
+		if it.Validation, _, err = federationValidate(f.Federation, it.GetMessageForSigningValidator, args[1], nil); err != nil {
 			return nil, err
 		}
 

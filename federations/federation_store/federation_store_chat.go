@@ -30,12 +30,10 @@ func storeChatMessage(tx store_db_interface.StoreDBTransactionInterface, msg *ch
 	if err := ss.Read(); err != nil {
 		return err
 	}
-	if len(ss.Data) >= config.LIST_SIZE-1 {
-		return errors.New("publisher has way to many listings")
-	}
 	if remove {
 		ss.Delete(id)
 	} else {
+		ss.PopLast()
 		ss.Add(id, float64(msg.Validation.Timestamp))
 	}
 	ss.Save()
@@ -121,8 +119,8 @@ func StoreChatMessage(msg *chat_message.ChatMessage) error {
 	}
 
 	type Notification struct {
-		Type    string `json:"type"`
-		Message []byte `json:"message"`
+		Type    string `json:"type" msgpack:"type"`
+		Message []byte `json:"message" msgpack:"message"`
 	}
 
 	federation_notifications.NewMessageSubscriptionsNotifications.Broadcast(msg)
@@ -180,45 +178,6 @@ func GetChatLastMessage(first, second string) (lastMessage []byte, err error) {
 }
 
 func GetChatMessages(first, second *addresses.Address, start int) (list []*api_types.APIMethodFindListItem, err error) {
-
-	f := federation_serve.ServeFederation.Load()
-	if f == nil {
-		return nil, errors.New("not serving this federation")
-	}
-
 	first2, second2, _ := chat_message.SortKeys(first.Encoded, second.Encoded)
-
-	err = f.Store.DB.View(func(tx store_db_interface.StoreDBTransactionInterface) error {
-
-		ss := small_sorted_set.NewSmallSortedSet(config.LIST_SIZE, "messages_all:"+first2+":"+second2, tx)
-		if err = ss.Read(); err != nil {
-			return err
-		}
-
-		for i := start; i < len(ss.Data) && len(list) < config.CHAT_MESSAGES_LIST_COUNT; i++ {
-			result := ss.Data[i]
-
-			list = append(list, &api_types.APIMethodFindListItem{
-				result.Key,
-				result.Score,
-			})
-		}
-
-		return nil
-	})
-	return
-}
-
-func GetChatMessage(id string) (message []byte, err error) {
-
-	f := federation_serve.ServeFederation.Load()
-	if f == nil {
-		return nil, errors.New("not serving this federation")
-	}
-
-	err = f.Store.DB.View(func(tx store_db_interface.StoreDBTransactionInterface) error {
-		message = tx.Get("messages:" + id)
-		return nil
-	})
-	return
+	return FindData("messages_all:"+first2+":"+second2, start, config.CHAT_MESSAGES_LIST_COUNT)
 }

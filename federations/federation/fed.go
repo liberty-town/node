@@ -9,6 +9,7 @@ import (
 	"liberty-town/node/federations/category"
 	"liberty-town/node/federations/federation_store/ownership"
 	"liberty-town/node/federations/moderator"
+	"liberty-town/node/network/api_implementation/api_common/api_types"
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
 	"liberty-town/node/validator"
 	"liberty-town/node/validator/validation"
@@ -266,7 +267,7 @@ func (this *Federation) Validate() error {
 	return nil
 }
 
-func (this *Federation) SignValidation(getMessage func() []byte, validate func([]byte) []byte) (*validation.Validation, error) {
+func (this *Federation) SignValidation(getMessage func() []byte, validate func([]byte) []byte, extra *api_types.ValidatorCheckExtraRequest) (*validation.Validation, any, error) {
 	all := make(map[int]bool)
 	for len(all) < len(this.Validators) {
 		index := rand.Intn(len(this.Validators))
@@ -275,16 +276,16 @@ func (this *Federation) SignValidation(getMessage func() []byte, validate func([
 		}
 		all[index] = true
 		v := this.Validators[index]
-		validation, err := v.SignValidation(getMessage, validate)
+		validation, validationExtra, err := v.SignValidation(getMessage, validate, extra)
 		if err == nil {
-			return validation, nil
+			return validation, validationExtra, nil
 		}
 
 		if err != nil && err.Error() != "validator no response" {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return nil, errors.New("no validator online")
+	return nil, nil, errors.New("no validator online")
 }
 
 func (this *Federation) ValidateSignatures() error {

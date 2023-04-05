@@ -3,10 +3,8 @@ package federation_store
 import (
 	"errors"
 	"liberty-town/node/federations/federation_serve"
-	"liberty-town/node/federations/federation_store/store_data/listings"
 	"liberty-town/node/federations/federation_store/store_data/listings_summaries"
 	"liberty-town/node/pandora-pay/helpers"
-	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
 	"liberty-town/node/store/store_db/store_db_interface"
 	"liberty-town/node/store/store_utils"
 )
@@ -45,14 +43,8 @@ func StoreListingSummary(listingSummary *listings_summaries.ListingSummary) erro
 
 		tx.Put("listings_summaries:"+listingSummary.ListingIdentity.Encoded, helpers.SerializeToBytes(listingSummary))
 
-		if data := tx.Get("listings:" + listingSummary.ListingIdentity.Encoded); data != nil {
-			listing := &listings.Listing{}
-			if err = listing.Deserialize(advanced_buffers.NewBufferReader(data)); err != nil {
-				return
-			}
-			if err = storeListingScore(tx, listing, false, nil, listingSummary); err != nil {
-				return
-			}
+		if err = storeListingScore(tx, listingSummary.ListingIdentity.Encoded, nil, false, nil, listingSummary); err != nil {
+			return
 		}
 
 		if err = store_utils.IncreaseCount("listings_summaries", listingSummary.ListingIdentity.Encoded, listingSummary.GetBetterScore(), tx); err != nil {
@@ -61,19 +53,4 @@ func StoreListingSummary(listingSummary *listings_summaries.ListingSummary) erro
 
 		return nil
 	})
-}
-
-func GetListingSummary(listingIdentity string) (listingSummary []byte, err error) {
-
-	f := federation_serve.ServeFederation.Load()
-
-	if f == nil {
-		return nil, errors.New("not serving this federation")
-	}
-
-	err = f.Store.DB.View(func(tx store_db_interface.StoreDBTransactionInterface) error {
-		listingSummary = tx.Get("listings_summaries:" + listingIdentity)
-		return nil
-	})
-	return
 }

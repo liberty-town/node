@@ -77,6 +77,15 @@ func Initialize() {
 			"getAll": js.FuncOf(listingsGetAll),
 			"search": js.FuncOf(listingsSearch),
 		}),
+		"threads": js.ValueOf(map[string]any{
+			"store":  js.FuncOf(threadStore),
+			"get":    js.FuncOf(threadGet),
+			"search": js.FuncOf(threadsSearch),
+		}),
+		"comments": js.ValueOf(map[string]any{
+			"store": js.FuncOf(commentStore),
+			"get":   js.FuncOf(commentsGetAll),
+		}),
 		"accountsSummaries": js.ValueOf(map[string]any{
 			"get":   js.FuncOf(accountSummaryGet),
 			"store": js.FuncOf(accountSummaryStore),
@@ -88,6 +97,9 @@ func Initialize() {
 		"reviews": js.ValueOf(map[string]any{
 			"store":  js.FuncOf(reviewStore),
 			"getAll": js.FuncOf(reviewsGetAll),
+		}),
+		"polls": js.ValueOf(map[string]any{
+			"vote": js.FuncOf(voteNow),
 		}),
 		"invoices": js.ValueOf(map[string]any{
 			"validate":           js.FuncOf(invoiceValidate),
@@ -125,12 +137,22 @@ func Initialize() {
 			"LISTING_SHIPPING_MAX_COUNT":     js.ValueOf(config.LISTING_SHIPPING_MAX_COUNT),
 			"LISTING_SHIPPING_MAX_LENGTH":    js.ValueOf(config.LISTING_SHIPPING_MAX_LENGTH),
 			"LISTING_SHIPPING_MIN_LENGTH":    js.ValueOf(config.LISTING_SHIPPING_MIN_LENGTH),
+			"LISTINGS_LIST_COUNT":            js.ValueOf(config.LISTINGS_LIST_COUNT),
+			"THREAD_KEYWORD_MAX_LENGTH":      js.ValueOf(config.THREAD_KEYWORD_MAX_LENGTH),
+			"THREAD_KEYWORDS_MAX_COUNT":      js.ValueOf(config.THREAD_KEYWORDS_MAX_COUNT),
+			"THREAD_CONTENT_MAX_LENGTH":      js.ValueOf(config.THREAD_CONTENT_MAX_LENGTH),
+			"THREAD_TITLE_MIN_LENGTH":        js.ValueOf(config.THREAD_TITLE_MIN_LENGTH),
+			"THREAD_LINK_MAX_LENGTH":         js.ValueOf(config.THREAD_LINK_MAX_LENGTH),
+			"THREAD_TITLE_MAX_LENGTH":        js.ValueOf(config.THREAD_TITLE_MAX_LENGTH),
+			"THREAD_LINKS_MAX_COUNT":         js.ValueOf(config.THREAD_LINKS_MAX_COUNT),
+			"THREADS_LIST_COUNT":             js.ValueOf(config.THREADS_LIST_COUNT),
+			"COMMENT_CONTENT_MAX_LENGTH":     js.ValueOf(config.COMMENT_CONTENT_MAX_LENGTH),
+			"COMMENTS_LIST_COUNT":            js.ValueOf(config.COMMENTS_LIST_COUNT),
 			"REVIEW_TITLE_MAX_LENGTH":        js.ValueOf(config.REVIEW_TITLE_MAX_LENGTH),
 			"REVIEWS_LIST_COUNT":             js.ValueOf(config.REVIEWS_LIST_COUNT),
 			"CHAT_MESSAGES_LIST_COUNT":       js.ValueOf(config.CHAT_MESSAGES_LIST_COUNT),
 			"CHAT_CONVERSATIONS_LIST_COUNT":  js.ValueOf(config.CHAT_CONVERSATIONS_LIST_COUNT),
 			"CHAT_MESSAGE_MAX_LENGTH":        js.ValueOf(config.CHAT_MESSAGE_MAX_LENGTH),
-			"LISTINGS_LIST_COUNT":            js.ValueOf(config.LISTINGS_LIST_COUNT),
 		}),
 		"enums": js.ValueOf(map[string]any{
 			"moderators": js.ValueOf(map[string]any{

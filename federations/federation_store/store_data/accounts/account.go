@@ -10,13 +10,13 @@ import (
 )
 
 type Account struct {
-	Version            AccountVersion         `json:"version"`
-	FederationIdentity *addresses.Address     `json:"federationIdentity"`
-	Identity           *addresses.Address     `json:"identity"`
-	Description        string                 `json:"description"`
-	Country            uint64                 `json:"country"`
-	Validation         *validation.Validation `json:"validation"`
-	Ownership          *ownership.Ownership   `json:"ownership"`
+	Version            AccountVersion         `json:"version" msgpack:"version"`
+	FederationIdentity *addresses.Address     `json:"federation"  msgpack:"federation"`
+	Identity           *addresses.Address     `json:"identity" msgpack:"identity"`
+	Description        string                 `json:"description" msgpack:"description"`
+	Country            uint64                 `json:"country" msgpack:"country"`
+	Validation         *validation.Validation `json:"validation" msgpack:"validation"`
+	Ownership          *ownership.Ownership   `json:"ownership" msgpack:"ownership"`
 }
 
 func (this *Account) AdvancedSerialize(w *advanced_buffers.BufferWriter, includeValidation, includeOwnership, includeOwnershipSignature bool) {
@@ -76,7 +76,7 @@ func (this *Account) Deserialize(r *advanced_buffers.BufferReader) (err error) {
 	}
 
 	this.Validation = &validation.Validation{}
-	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator); err != nil {
+	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator, nil); err != nil {
 		return
 	}
 
@@ -140,7 +140,7 @@ func (this *Account) GetBetterScore() uint64 {
 }
 
 func (this *Account) ValidateSignatures() error {
-	if !this.Validation.Verify(this.GetMessageForSigningValidator) {
+	if !this.Validation.Verify(this.GetMessageForSigningValidator, nil) {
 		return errors.New("account validation failed")
 	}
 	if !this.Ownership.Verify(this.GetMessageForSigningOwnership) {

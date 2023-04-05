@@ -39,5 +39,5 @@ func ValidationDeserialized(v *validation.Validation, data string, cb func() []b
 	}
 
 	r := advanced_buffers.NewBufferReader(helpers.DecodeBase64(data))
-	return v.Deserialize(r, cb)
+	return v.Deserialize(r, cb, nil)
 }

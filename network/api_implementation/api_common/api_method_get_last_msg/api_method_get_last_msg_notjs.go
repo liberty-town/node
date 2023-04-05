@@ -12,15 +12,15 @@ import (
 
 func MethodGetLastMessage(r *http.Request, args *APIMethodGetLastMessageRequest, reply *api_types.APIMethodGetResult) error {
 
-	message, err := federation_store.GetChatLastMessage(args.First, args.Second)
+	found, err := federation_store.GetChatLastMessage(args.First, args.Second)
 	if err != nil {
 		return err
 	}
 
-	if len(message) == 0 {
+	if len(found) == 0 {
 		return errors.New("not found")
 	}
 
-	reply.Result = message
+	reply.Result = found
 	return nil
 }

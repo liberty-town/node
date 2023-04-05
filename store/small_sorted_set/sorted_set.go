@@ -2,6 +2,7 @@ package small_sorted_set
 
 import (
 	"golang.org/x/exp/slices"
+	"liberty-town/node/config"
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
 	"liberty-town/node/store/store_db/store_db_interface"
 )
@@ -141,6 +142,17 @@ func (this *SmallSortedSet) Delete(key string) bool {
 	this.changed = true
 
 	return true
+}
+
+func (this *SmallSortedSet) PopLast() string {
+	if len(this.Data) == config.LIST_SIZE {
+		it := this.Data[len(this.Data)-1]
+		this.Data = this.Data[:len(this.Data)-1]
+		delete(this.Dict, it.Key)
+		this.changed = true
+		return it.Key
+	}
+	return ""
 }
 
 func NewSmallSortedSet(maxCount int, prefix string, tx store_db_interface.StoreDBTransactionInterface) *SmallSortedSet {

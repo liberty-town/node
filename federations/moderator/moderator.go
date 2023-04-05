@@ -66,7 +66,7 @@ func (this *Moderator) Deserialize(r *advanced_buffers.BufferReader) (err error)
 		return errors.New("invalid Moderator Version")
 	}
 	this.Validation = &validation.Validation{}
-	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator); err != nil {
+	if err = this.Validation.Deserialize(r, this.GetMessageForSigningValidator, nil); err != nil {
 		return
 	}
 
@@ -99,7 +99,7 @@ func (this *Moderator) Validate() error {
 }
 
 func (this *Moderator) ValidateSignatures() error {
-	if !this.Validation.Verify(this.GetMessageForSigningValidator) {
+	if !this.Validation.Verify(this.GetMessageForSigningValidator, nil) {
 		return errors.New("listing validation signature failed")
 	}
 	if !this.Ownership.Verify(this.GetMessageForSigningOwnership) {

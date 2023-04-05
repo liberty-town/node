@@ -12,15 +12,15 @@ import (
 
 func MethodGetListing(r *http.Request, args *api_types.APIMethodGetRequest, reply *api_types.APIMethodGetResult) error {
 
-	listing, err := federation_store.GetListing(args.Identity)
+	found, err := federation_store.GetData("listings:", args.Identity)
 	if err != nil {
 		return err
 	}
 
-	if listing == nil {
+	if found == nil {
 		return errors.New("not found")
 	}
 
-	reply.Result = listing
+	reply.Result = found
 	return nil
 }

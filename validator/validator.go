@@ -17,9 +17,9 @@ import (
 )
 
 type Validator struct {
-	Version   ValidatorVersion     `json:"version"`
-	Contact   *contact.Contact     `json:"contact"`
-	Ownership *ownership.Ownership `json:"ownership"`
+	Version   ValidatorVersion     `json:"version" msgpack:"version"`
+	Contact   *contact.Contact     `json:"contact" msgpack:"contact"`
+	Ownership *ownership.Ownership `json:"ownership" msgpack:"ownership"`
 }
 
 func (this *Validator) AdvancedSerialize(w *advanced_buffers.BufferWriter, includeOwnershipSignature bool) {
@@ -59,15 +59,15 @@ func (this *Validator) GetMessageToSign() []byte {
 	return w.Bytes()
 }
 
-//从服务器获取签名
-func (this *Validator) sign(getMessage func() []byte, validate func([]byte) []byte) (nonce []byte, timestamp uint64, signature []byte, err error) {
+// 从服务器获取签名
+func (this *Validator) sign(getMessage func() []byte, validate func([]byte) []byte, extra *api_types.ValidatorCheckExtraRequest) ([]byte, uint64, []byte, any, error) {
 
-	var pong *api_method_ping.APIPingReply
-	if pong, err = contact.Send[api_method_ping.APIPingReply](this.Contact, "ping", []byte{}); err != nil {
-		return nil, 0, nil, errors.New("validator no response")
+	pong, err := contact.Send[api_method_ping.APIPingReply](this.Contact, "ping", []byte{})
+	if err != nil {
+		return nil, 0, nil, nil, errors.New("validator no response")
 	}
 	if pong == nil || pong.Ping != "pong" {
-		return nil, 0, nil, errors.New("invalid pong")
+		return nil, 0, nil, nil, errors.New("invalid pong")
 	}
 
 	message := getMessage()
@@ -80,7 +80,7 @@ func (this *Validator) sign(getMessage func() []byte, validate func([]byte) []by
 	//签名消息
 	mySignature, err := settings.Settings.Load().Validation.PrivateKey.Sign(wr.Bytes())
 	if err != nil {
-		return nil, 0, nil, err
+		return nil, 0, nil, nil, err
 	}
 
 	checkRequest := &api_types.ValidatorCheckRequest{
@@ -92,7 +92,7 @@ func (this *Validator) sign(getMessage func() []byte, validate func([]byte) []by
 
 	var b []byte
 	if b, err = json.Marshal(checkRequest); err != nil {
-		return nil, 0, nil, err
+		return nil, 0, nil, nil, err
 	}
 
 	solutionRequest := &api_types.ValidatorSolutionRequest{
@@ -101,16 +101,17 @@ func (this *Validator) sign(getMessage func() []byte, validate func([]byte) []by
 		uint64(len(message)),
 		mySignature,
 		nil,
+		extra,
 	}
 
 	//有时需要验证码
 	var checkResult *api_types.ValidatorCheckResult
 	if checkResult, err = contact.Send[api_types.ValidatorCheckResult](this.Contact, "check", b); err != nil {
-		return nil, 0, nil, err
+		return nil, 0, nil, nil, err
 	}
 
 	if checkResult == nil {
-		return nil, 0, nil, errors.New("no result from validator")
+		return nil, 0, nil, nil, errors.New("no result from validator")
 	}
 
 	//验证码的类型
@@ -142,25 +143,25 @@ func (this *Validator) sign(getMessage func() []byte, validate func([]byte) []by
 				string(checkResult.Data),
 				proof,
 			}); err != nil {
-				return nil, 0, nil, err
+				return nil, 0, nil, nil, err
 			}
 
 			//显示验证码
 			if solutionRequest.Solution, err = this.processValidate(validate, checkResult.ChallengeUri, proof, b); err != nil {
-				return nil, 0, nil, err
+				return nil, 0, nil, nil, err
 			}
 
 			if len(solutionRequest.Solution) == 0 {
-				return nil, 0, nil, errors.New("validation canceled")
+				return nil, 0, nil, nil, errors.New("validation canceled")
 			}
 
 		}
 	default:
-		return nil, 0, nil, errors.New("unknown type of challenge")
+		return nil, 0, nil, nil, errors.New("unknown type of challenge")
 	}
 
 	if b, err = json.Marshal(solutionRequest); err != nil {
-		return nil, 0, nil, err
+		return nil, 0, nil, nil, err
 	}
 
 	for i := 0; i < 10; i++ {
@@ -170,19 +171,35 @@ func (this *Validator) sign(getMessage func() []byte, validate func([]byte) []by
 			if strings.Contains(err.Error(), "(Client.Timeout exceeded while awaiting headers)") {
 				continue
 			}
-			return nil, 0, nil, err
+			return nil, 0, nil, nil, err
 		}
-		return result.Nonce, result.Timestamp, result.Signature, nil
+
+		if extra != nil && extra.Version == api_types.VALIDATOR_EXTRA_VOTE {
+
+			b, err := json.Marshal(result.Extra)
+			if err != nil {
+				return nil, 0, nil, nil, err
+			}
+
+			votePayload := &api_types.ValidatorSolutionVoteExtraResult{}
+			if err = json.Unmarshal(b, votePayload); err != nil {
+				return nil, 0, nil, nil, err
+			}
+			result.Extra = votePayload
+		}
+
+		return result.Nonce, result.Timestamp, result.Signature, result.Extra, nil
 	}
 
-	return nil, 0, nil, errors.New("timeout")
+	return nil, 0, nil, nil, errors.New("timeout")
 }
 
-//数字签名
-func (this *Validator) SignValidation(getMessage func() []byte, validate func([]byte) []byte) (*validation.Validation, error) {
-	nonce, timestamp, signature, err := this.sign(getMessage, validate)
+// 数字签名
+func (this *Validator) SignValidation(getMessage func() []byte, validate func([]byte) []byte, extra *api_types.ValidatorCheckExtraRequest) (*validation.Validation, any, error) {
+
+	nonce, timestamp, signature, validationExtra, err := this.sign(getMessage, validate, extra)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	v := &validation.Validation{
@@ -193,11 +210,21 @@ func (this *Validator) SignValidation(getMessage func() []byte, validate func([]
 		nil,
 	}
 
-	if v.Address, err = addresses.CreateAddrFromSignature(v.GetMessageToValidator(getMessage), signature); err != nil {
-		return nil, err
+	var getExtraInfo func() []byte
+	if extra != nil && extra.Version == api_types.VALIDATOR_EXTRA_VOTE {
+		getExtraInfo = func() []byte {
+			w := advanced_buffers.NewBufferWriter()
+			w.WriteUvarint(validationExtra.(*api_types.ValidatorSolutionVoteExtraResult).Upvotes)
+			w.WriteUvarint(validationExtra.(*api_types.ValidatorSolutionVoteExtraResult).Downvotes)
+			return w.Bytes()
+		}
 	}
 
-	return v, nil
+	if v.Address, err = addresses.CreateAddrFromSignature(v.GetMessageToValidator(getMessage, getExtraInfo), signature); err != nil {
+		return nil, nil, err
+	}
+
+	return v, validationExtra, nil
 }
 
 func (this *Validator) Validate() error {

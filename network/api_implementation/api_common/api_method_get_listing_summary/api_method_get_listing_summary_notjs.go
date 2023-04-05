@@ -12,7 +12,7 @@ import (
 
 func MethodGetListingSummary(r *http.Request, args *api_types.APIMethodGetRequest, reply *api_types.APIMethodGetResult) error {
 
-	listingSummary, err := federation_store.GetListingSummary(args.Identity)
+	listingSummary, err := federation_store.GetData("listings_summaries:", args.Identity)
 	if err != nil {
 		return err
 	}

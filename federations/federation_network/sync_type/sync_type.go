@@ -13,6 +13,9 @@ const (
 	SYNC_LISTINGS_SUMMARIES
 	SYNC_MESSAGES
 	SYNC_REVIEWS
+	SYNC_THREADS
+	SYNC_COMMENTS
+	SYNC_POLLS
 )
 
 func (t SyncVersion) GetStringStoreName() (string, error) {
@@ -29,6 +32,12 @@ func (t SyncVersion) GetStringStoreName() (string, error) {
 		return "messages", nil
 	case SYNC_REVIEWS:
 		return "reviews", nil
+	case SYNC_THREADS:
+		return "threads", nil
+	case SYNC_COMMENTS:
+		return "comments", nil
+	case SYNC_POLLS:
+		return "polls", nil
 	default:
 		return "", errors.New("invalid sync type")
 	}

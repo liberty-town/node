@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/base64"
 	"errors"
-	msgpack "github.com/vmihailenco/msgpack/v5"
 	"liberty-town/node/builds/webassembly/webassembly_utils"
 	"liberty-town/node/config/globals"
 	"liberty-town/node/federations/chat/chat_message"
@@ -12,6 +11,7 @@ import (
 	"liberty-town/node/network/api_code/api_code_websockets"
 	"liberty-town/node/network/api_implementation/api_common/api_types"
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
+	"liberty-town/node/pandora-pay/helpers/msgpack"
 	"liberty-town/node/pandora-pay/helpers/recovery"
 	"sync/atomic"
 	"syscall/js"
