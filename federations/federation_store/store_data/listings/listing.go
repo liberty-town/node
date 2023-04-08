@@ -196,7 +196,7 @@ func (this *Listing) Deserialize(r *advanced_buffers.BufferReader) (err error) {
 	if b, err = r.ReadByte(); err != nil {
 		return
 	}
-	if b > config.LISTING_SHIPPING_TO_MAX_COUNT {
+	if b == 0 || b > config.LISTING_SHIPPING_TO_MAX_COUNT {
 		return errors.New("listing shipping to length is invalid")
 	}
 	this.ShipsTo = make([]uint64, b)
@@ -339,11 +339,19 @@ func (this *Listing) Validate() error {
 	}
 
 	dict = make(map[uint64]bool)
-	for _, x := range this.ShipsTo {
+	for i, x := range this.ShipsTo {
 		if x > config.COUNTRY_CODE_MAX {
 			return errors.New("listing shipping to code is invalid")
 		}
+
+		if (x == 243 || x == 244) && (i > 0) {
+			return errors.New("invalid shipping to")
+		} else if dict[243] || dict[244] {
+			return errors.New("don't specify other countries")
+		}
+
 		dict[x] = true
+
 	}
 	if len(dict) != len(this.ShipsTo) {
 		return errors.New("listing ships to repeated itself")

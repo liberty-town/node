@@ -20,7 +20,33 @@ import (
 	"strconv"
 )
 
-func storeListingScore(tx store_db_interface.StoreDBTransactionInterface, listingIdentity string, listing *listings.Listing, remove bool, accountSummary *accounts_summaries.AccountSummary, listingSummary *listings_summaries.ListingSummary) (err error) {
+func storeListingCountry(prefix string, listing *listings.Listing, country uint64, score float64, storeAll bool, remove bool, tx store_db_interface.StoreDBTransactionInterface) (err error) {
+
+	if err = storeSortedSet(prefix+strconv.FormatUint(country, 10), listing.Identity.Encoded, score, remove, tx); err != nil {
+		return err
+	}
+
+	if storeAll {
+
+		if country != 244 {
+			if err = storeSortedSet(prefix+strconv.FormatUint(244, 10), listing.Identity.Encoded, score, remove, tx); err != nil {
+				return err
+			}
+		}
+
+		for code, dict := range AllCountries {
+			if dict[country] {
+				if err = storeSortedSet(prefix+strconv.FormatUint(code, 10), listing.Identity.Encoded, score, remove, tx); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func storeListingScore(listingIdentity string, listing *listings.Listing, remove bool, accountSummary *accounts_summaries.AccountSummary, listingSummary *listings_summaries.ListingSummary, tx store_db_interface.StoreDBTransactionInterface) (err error) {
 
 	if listing == nil {
 		data := tx.Get("listings:" + listingIdentity)
@@ -67,17 +93,34 @@ func storeListingScore(tx store_db_interface.StoreDBTransactionInterface, listin
 		if err = storeSortedSet("listings_by_categories:"+string(listing.Type)+":"+string(cryptography.SHA3([]byte(strconv.FormatUint(category, 10)))), listing.Identity.Encoded, score, remove, tx); err != nil {
 			return
 		}
-	}
 
-	words := listing.GetWords()
-	for _, word := range words {
-		if err = storeSortedSet("listings_by_name:"+string(listing.Type)+":"+string(cryptography.SHA3([]byte(word))), listing.Identity.Encoded, score, remove, tx); err != nil {
+		if err = storeListingCountry("listings_by_categories:"+string(listing.Type)+":"+string(cryptography.SHA3([]byte(strconv.FormatUint(category, 10))))+":from:", listing, listing.ShipsFrom, score, true, remove, tx); err != nil {
 			return
+		}
+
+		for _, countryTo := range listing.ShipsTo {
+			if err = storeListingCountry("listings_by_categories:"+string(listing.Type)+":"+string(cryptography.SHA3([]byte(strconv.FormatUint(category, 10))))+":to:", listing, countryTo, score, false, remove, tx); err != nil {
+				return err
+			}
 		}
 	}
 
-	if err = storeSortedSet("listings_all:"+string(listing.Type), listing.Identity.Encoded, score, remove, tx); err != nil {
-		return
+	words := append(listing.GetWords(), "")
+	for _, word := range words {
+
+		if err = storeSortedSet("listings_by_name:"+string(listing.Type)+":"+string(cryptography.SHA3([]byte(word))), listing.Identity.Encoded, score, remove, tx); err != nil {
+			return
+		}
+
+		if err = storeListingCountry("listings_by_name:"+string(listing.Type)+":"+string(cryptography.SHA3([]byte(word)))+":from:", listing, listing.ShipsFrom, score, true, remove, tx); err != nil {
+			return
+		}
+
+		for _, countryTo := range listing.ShipsTo {
+			if err = storeListingCountry("listings_by_name:"+string(listing.Type)+":"+string(cryptography.SHA3([]byte(word)))+":to:", listing, countryTo, score, false, remove, tx); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -111,7 +154,7 @@ func StoreListing(listing *listings.Listing) error {
 			return errors.New("data is older")
 		}
 		if score > 0 {
-			if err = storeListingScore(tx, listing.Identity.Encoded, nil, true, nil, nil); err != nil {
+			if err = storeListingScore(listing.Identity.Encoded, nil, true, nil, nil, tx); err != nil {
 				return
 			}
 		}
@@ -123,7 +166,7 @@ func StoreListing(listing *listings.Listing) error {
 			return
 		}
 
-		if err = storeListingScore(tx, listing.Identity.Encoded, listing, false, nil, nil); err != nil {
+		if err = storeListingScore(listing.Identity.Encoded, listing, false, nil, nil, tx); err != nil {
 			return
 		}
 
@@ -153,7 +196,7 @@ func RemoveListing(federationIdentity, listingIdentity string) error {
 		tx.Delete("listings_publishers:" + listingIdentity)
 		tx.Delete("listings_summaries:" + listingIdentity)
 
-		if err = storeListingScore(tx, listing.Identity.Encoded, listing, true, nil, nil); err != nil {
+		if err = storeListingScore(listing.Identity.Encoded, listing, true, nil, nil, tx); err != nil {
 			return
 		}
 
@@ -189,7 +232,7 @@ func GetListingData(listingIdentity string) (listing, accountSummary, listingSum
 	return
 }
 
-func SearchListings(queries []string, listingType listing_type.ListingType, queryType byte, start int) (list []*api_types.APIMethodFindListItem, err error) {
+func SearchListings(queries []string, listingType listing_type.ListingType, queryType byte, shipping uint64, shippingType byte, start int) (list []*api_types.APIMethodFindListItem, err error) {
 
 	f := federation_serve.ServeFederation.Load()
 	if f == nil {
@@ -202,61 +245,91 @@ func SearchListings(queries []string, listingType listing_type.ListingType, quer
 
 	err = f.Store.DB.View(func(tx store_db_interface.StoreDBTransactionInterface) error {
 
-		intersection := make(map[string]int)
+		var strQuery string
+		switch queryType {
+		case 0:
+			strQuery = "listings_by_name:"
+		case 1:
+			strQuery = "listings_by_categories:"
+		}
 
-		var str string
+		var strShippingQueries []string
+
 		var ss *small_sorted_set.SmallSortedSet
 
-		if len(queries) == 1 && (queries[0] == "" || queries[0] == "*") {
-			ss = small_sorted_set.NewSmallSortedSet(config.LIST_SIZE, "listings_all:"+string(listingType), tx)
-		} else {
-			switch queryType {
-			case 0:
-				str = "listings_by_name:"
-			case 1:
-				str = "listings_by_categories:"
+		switch shippingType {
+		case 0:
+			strShippingQueries = append(strShippingQueries, "")
+		case 1:
+			strShippingQueries = append(strShippingQueries, ":from:"+strconv.FormatUint(shipping, 10))
+		case 2:
+			strShippingQueries = append(strShippingQueries, ":to:"+strconv.FormatUint(shipping, 10))
+			if shipping != 244 {
+				strShippingQueries = append(strShippingQueries, ":to:"+strconv.FormatUint(244, 10))
 			}
-			ss = small_sorted_set.NewSmallSortedSet(config.LIST_SIZE, str+string(listingType)+":"+string(cryptography.SHA3([]byte(queries[0]))), tx)
-		}
-
-		if err = ss.Read(); err != nil {
-			return err
-		}
-		for _, d := range ss.Data {
-			intersection[d.Key] = 1
-		}
-
-		for i := 1; i < len(queries); i++ {
-			ss = small_sorted_set.NewSmallSortedSet(config.LIST_SIZE, str+string(cryptography.SHA3([]byte(queries[i]))), tx)
-			if err = ss.Read(); err != nil {
-				return err
-			}
-			for _, d := range ss.Data {
-				if intersection[d.Key] > 0 {
-					intersection[d.Key]++
+			for code, dict := range AllCountries {
+				if dict[shipping] && code != shipping {
+					strShippingQueries = append(strShippingQueries, ":to:"+strconv.FormatUint(code, 10))
 				}
 			}
 		}
 
-		var finals []*small_sorted_set.SmallSortedSetNode
-		for key, val := range intersection {
-			if val == len(queries) {
-				finals = append(finals, ss.Dict[key])
+		if len(queries) == 1 && queries[0] == "*" {
+			queries[0] = ""
+		}
+
+		reunion := make(map[string]*small_sorted_set.SmallSortedSetNode)
+
+		for _, strShipping := range strShippingQueries {
+
+			intersection := make(map[string]int)
+
+			ss = small_sorted_set.NewSmallSortedSet(config.LIST_SIZE, strQuery+string(listingType)+":"+string(cryptography.SHA3([]byte(queries[0])))+strShipping, tx)
+			if err = ss.Read(); err != nil {
+				return err
 			}
+			for _, d := range ss.Data {
+				intersection[d.Key] = 1
+			}
+
+			for i := 1; i < len(queries); i++ {
+				ss = small_sorted_set.NewSmallSortedSet(config.LIST_SIZE, strQuery+string(listingType)+":"+string(cryptography.SHA3([]byte(queries[i])))+strShipping, tx)
+				if err = ss.Read(); err != nil {
+					return err
+				}
+				for _, d := range ss.Data {
+					if intersection[d.Key] > 0 {
+						intersection[d.Key]++
+					}
+				}
+			}
+
+			for k, v := range intersection {
+				if v == len(queries) {
+					reunion[k] = ss.Dict[k]
+				}
+			}
+
+		}
+
+		var finals []*small_sorted_set.SmallSortedSetNode
+		for _, v := range reunion {
+			finals = append(finals, v)
 		}
 
 		slices.SortFunc(finals, func(a, b *small_sorted_set.SmallSortedSetNode) bool {
 			return a.Score > b.Score
 		})
 
-		for i := start; i < len(ss.Data) && len(list) < config.LISTINGS_LIST_COUNT; i++ {
+		for i := start; i < len(finals) && len(list) < config.LISTINGS_LIST_COUNT; i++ {
 
-			result := ss.Data[i]
+			result := finals[i]
 
 			list = append(list, &api_types.APIMethodFindListItem{
 				result.Key,
 				result.Score,
 			})
+
 		}
 
 		return nil

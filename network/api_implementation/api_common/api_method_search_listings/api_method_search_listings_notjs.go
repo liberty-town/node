@@ -11,7 +11,7 @@ import (
 
 func MethodSearchListings(r *http.Request, args *APIMethodSearchListingsRequest, reply *api_types.APIMethodFindListResult) error {
 
-	results, err := federation_store.SearchListings(args.Query, args.Type, args.QueryType, args.Start)
+	results, err := federation_store.SearchListings(args.Query, args.Type, args.QueryType, args.Shipping, args.ShippingType, args.Start)
 	if err != nil {
 		return err
 	}

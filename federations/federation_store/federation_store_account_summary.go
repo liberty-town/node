@@ -54,7 +54,7 @@ func StoreAccountSummary(accountSummary *accounts_summaries.AccountSummary) erro
 			}
 
 			for _, entry := range ss.Data {
-				if err = storeListingScore(tx, entry.Key, nil, false, accountSummary, nil); err != nil {
+				if err = storeListingScore(entry.Key, nil, false, accountSummary, nil, tx); err != nil {
 					return err
 				}
 			}

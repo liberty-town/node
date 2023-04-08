@@ -193,10 +193,12 @@ func listingsSearch(this js.Value, args []js.Value) any {
 		}
 
 		req := &struct {
-			Query     []string                 `json:"query,omitempty"`
-			Type      listing_type.ListingType `json:"type,omitempty"`
-			QueryType byte                     `json:"queryType,omitempty"`
-			Start     int                      `json:"start"`
+			Query        []string                 `json:"query,omitempty"`
+			Type         listing_type.ListingType `json:"type,omitempty"`
+			QueryType    byte                     `json:"queryType,omitempty"`
+			Start        int                      `json:"start"`
+			ShippingType byte                     `json:"shippingType"`
+			Shipping     uint64                   `json:"shipping"`
 		}{}
 
 		if err := json.Unmarshal([]byte(args[0].String()), req); err != nil {
@@ -218,6 +220,8 @@ func listingsSearch(this js.Value, args []js.Value) any {
 			req.Query,
 			req.QueryType,
 			req.Start,
+			req.ShippingType,
+			req.Shipping,
 		})
 
 		if err != nil {
@@ -227,20 +231,18 @@ func listingsSearch(this js.Value, args []js.Value) any {
 		duplicates := make(map[string]bool)
 		banned := make(map[string]bool)
 
-		for _, it := range list {
+		for _, searchResult := range list {
 
-			k := it.Key
-
-			if duplicates[k] || banned[it.Conn.RemoteAddr] { //已经找到 || 已被禁止
+			if duplicates[searchResult.Key] || banned[searchResult.Conn.RemoteAddr] { //已经找到 || 已被禁止
 				continue
 			}
 
-			if err := func() error {
+			if err = func() error {
 
 				listing := &listings.Listing{}
 				if err = federation_network.AggregateBestData[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
 					sync_type.SYNC_LISTINGS,
-					k,
+					searchResult.Key,
 				}, "get-listing", nil, func(answer *api_types.APIMethodGetResult, key string, score float64) error {
 					if len(answer.Result) > 0 {
 						if err := listing.Deserialize(advanced_buffers.NewBufferReader(answer.Result)); err != nil {
@@ -253,7 +255,7 @@ func listingsSearch(this js.Value, args []js.Value) any {
 							return errors.New("listing was not accepted")
 						}
 
-						if listing.Identity.Encoded != k {
+						if listing.Identity.Encoded != searchResult.Key {
 							return errors.New("listing identity mismatch")
 						}
 					}
@@ -316,7 +318,7 @@ func listingsSearch(this js.Value, args []js.Value) any {
 				listingSummaryScore := listingSummary.GetScore()
 				foundScore := listings.GetScore(listingSummaryScore, accountSummaryScore)
 
-				if it.Score > foundScore {
+				if searchResult.Score > foundScore {
 					return errors.New("score is less than it should be")
 				}
 
@@ -346,7 +348,9 @@ func listingsSearch(this js.Value, args []js.Value) any {
 					}
 				}
 
-				result := &SearchResult{it.Key, foundScore, listing, accountSummary, listingSummary}
+				duplicates[searchResult.Key] = true
+
+				result := &SearchResult{searchResult.Key, foundScore, listing, accountSummary, listingSummary}
 				b2, err := webassembly_utils.ConvertJSONBytes(result)
 				if err != nil {
 					return err
@@ -357,8 +361,8 @@ func listingsSearch(this js.Value, args []js.Value) any {
 
 				return nil
 			}(); err != nil {
-				gui.GUI.Error("banning connection", it.Conn.RemoteAddr, err)
-				banned[it.Conn.RemoteAddr] = true
+				gui.GUI.Error("banning connection", searchResult.Conn.RemoteAddr, err)
+				banned[searchResult.Conn.RemoteAddr] = true
 			}
 
 		}
@@ -410,20 +414,18 @@ func listingsGetAll(this js.Value, args []js.Value) any {
 
 		count := 0
 
-		for _, it := range list {
+		for _, searchResult := range list {
 
-			k := it.Key
-
-			if duplicates[k] || banned[it.Conn.RemoteAddr] { //已经找到 || 已被禁止
+			if duplicates[searchResult.Key] || banned[searchResult.Conn.RemoteAddr] { //已经找到 || 已被禁止
 				continue
 			}
 
-			if err := func() error {
+			if err = func() error {
 
 				listing := &listings.Listing{}
 				if err = federation_network.AggregateBestData[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
 					sync_type.SYNC_LISTINGS,
-					k,
+					searchResult.Key,
 				}, "get-listing", nil, func(answer *api_types.APIMethodGetResult, key string, score float64) error {
 					if len(answer.Result) > 0 {
 						if err := listing.Deserialize(advanced_buffers.NewBufferReader(answer.Result)); err != nil {
@@ -436,13 +438,13 @@ func listingsGetAll(this js.Value, args []js.Value) any {
 							return errors.New("listing was not accepted")
 						}
 
-						if listing.Identity.Encoded != k {
+						if listing.Identity.Encoded != searchResult.Key {
 							return errors.New("listing identity mismatch")
 						}
 						if !listing.Publisher.Address.Equals(req.Account) {
 							return errors.New("invalid search")
 						}
-						if float64(listing.Publisher.Timestamp) < it.Score {
+						if float64(listing.Publisher.Timestamp) < searchResult.Score {
 							return errors.New("invalid score")
 						}
 
@@ -478,8 +480,9 @@ func listingsGetAll(this js.Value, args []js.Value) any {
 					return err
 				}
 
-				result := &SearchResult{it.Key, it.Score, listing, listingSummary}
-				b2, err := webassembly_utils.ConvertJSONBytes(result)
+				duplicates[searchResult.Key] = true
+
+				b2, err := webassembly_utils.ConvertJSONBytes(&SearchResult{searchResult.Key, searchResult.Score, listing, listingSummary})
 				if err != nil {
 					return err
 				}
@@ -489,8 +492,8 @@ func listingsGetAll(this js.Value, args []js.Value) any {
 
 				return nil
 			}(); err != nil {
-				gui.GUI.Error("banning connection", it.Conn.RemoteAddr, err)
-				banned[it.Conn.RemoteAddr] = true
+				gui.GUI.Error("banning connection", searchResult.Conn.RemoteAddr, err)
+				banned[searchResult.Conn.RemoteAddr] = true
 			}
 
 		}

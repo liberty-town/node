@@ -43,7 +43,7 @@ func StoreListingSummary(listingSummary *listings_summaries.ListingSummary) erro
 
 		tx.Put("listings_summaries:"+listingSummary.ListingIdentity.Encoded, helpers.SerializeToBytes(listingSummary))
 
-		if err = storeListingScore(tx, listingSummary.ListingIdentity.Encoded, nil, false, nil, listingSummary); err != nil {
+		if err = storeListingScore(listingSummary.ListingIdentity.Encoded, nil, false, nil, listingSummary, tx); err != nil {
 			return
 		}
 

@@ -41,7 +41,7 @@ func StoreReview(review *reviews.Review) error {
 		if err != nil {
 			return err
 		}
-		if review.GetBetterScore() <= score {
+		if review.GetBetterScore() < score {
 			return errors.New("data is older")
 		}
 

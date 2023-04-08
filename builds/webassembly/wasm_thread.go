@@ -186,22 +186,20 @@ func threadsSearch(this js.Value, args []js.Value) any {
 		duplicates := make(map[string]bool)
 		banned := make(map[string]bool)
 
-		for _, it := range list {
+		for _, searchResult := range list {
 
-			k := it.Key
-
-			if duplicates[k] || banned[it.Conn.RemoteAddr] { //已经找到 || 已被禁止
+			if duplicates[searchResult.Key] || banned[searchResult.Conn.RemoteAddr] { //已经找到 || 已被禁止
 				continue
 			}
 
 			if err := func() error {
 
-				b, err := msgpack.Marshal(&api_types.APIMethodGetRequest{it.Key})
+				b, err := msgpack.Marshal(&api_types.APIMethodGetRequest{searchResult.Key})
 				if err != nil {
 					return err
 				}
 
-				out := it.Conn.SendAwaitAnswer([]byte("get-thread"), b, context.Background(), 0)
+				out := searchResult.Conn.SendAwaitAnswer([]byte("get-thread"), b, context.Background(), 0)
 				if out.Err != nil {
 					return out.Err
 				}
@@ -230,7 +228,7 @@ func threadsSearch(this js.Value, args []js.Value) any {
 					return errors.New("thread was not accepted")
 				}
 
-				if thread.Identity.Encoded != k {
+				if thread.Identity.Encoded != searchResult.Key {
 					return errors.New("listing identity mismatch")
 				}
 
@@ -272,7 +270,7 @@ func threadsSearch(this js.Value, args []js.Value) any {
 				pollScore := poll.GetScore()
 				foundScore := thread.GetScore(pollScore)
 
-				if it.Score > foundScore {
+				if searchResult.Score > foundScore {
 					return errors.New("score is less than it should be")
 				}
 
@@ -299,8 +297,7 @@ func threadsSearch(this js.Value, args []js.Value) any {
 					}
 				}
 
-				result := &SearchResult{it.Key, foundScore, thread, poll}
-				b2, err := webassembly_utils.ConvertJSONBytes(result)
+				b2, err := webassembly_utils.ConvertJSONBytes(&SearchResult{searchResult.Key, foundScore, thread, poll})
 				if err != nil {
 					return err
 				}
@@ -310,8 +307,8 @@ func threadsSearch(this js.Value, args []js.Value) any {
 
 				return nil
 			}(); err != nil {
-				gui.GUI.Error("banning connection", it.Conn.RemoteAddr, err)
-				banned[it.Conn.RemoteAddr] = true
+				gui.GUI.Error("banning connection", searchResult.Conn.RemoteAddr, err)
+				banned[searchResult.Conn.RemoteAddr] = true
 			}
 
 		}

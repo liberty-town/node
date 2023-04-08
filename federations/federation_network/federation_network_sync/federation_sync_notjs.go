@@ -31,7 +31,7 @@ func ContinuouslyDownloadFederationData() {
 
 					if conn.Handshake.Consensus == config.NODE_CONSENSUS_TYPE_FULL {
 
-						syncType := sync_type.SyncVersion(rand.Intn(int(sync_type.SYNC_COMMENTS) + 1))
+						syncType := sync_type.SyncVersion(rand.Intn(int(sync_type.SYNC_POLLS) + 1))
 						data, err := connection.SendJSONAwaitAnswer[api_method_sync_list.APIMethodSyncListResult](conn, []byte("sync-list"), &api_method_sync_list.APIMethodSyncListRequest{
 							Type: syncType,
 						}, nil, 0)

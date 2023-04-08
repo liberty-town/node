@@ -13,6 +13,7 @@ import (
 	"liberty-town/node/federations/federation_store/store_data/polls"
 	"liberty-town/node/federations/federation_store/store_data/reviews"
 	"liberty-town/node/federations/federation_store/store_data/threads"
+	"liberty-town/node/gui"
 	"liberty-town/node/network/api_implementation/api_common/api_types"
 	"liberty-town/node/network/websocks/connection"
 	"liberty-town/node/pandora-pay/helpers"
@@ -92,6 +93,8 @@ func ProcessSync(conn *connection.AdvancedConnection, syncType sync_type.SyncVer
 			if err = result.Deserialize(advanced_buffers.NewBufferReader(data.Result)); err != nil {
 				return err
 			}
+
+			gui.GUI.Log("sync fetching", command, download[i])
 
 			switch syncType {
 			case sync_type.SYNC_ACCOUNTS:

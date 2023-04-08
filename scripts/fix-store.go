@@ -47,7 +47,7 @@ func main() {
 	}
 
 	for _, it := range list {
-		data, err := federation_store.GetAccount(it)
+		data, err := federation_store.GetData("accounts:", it)
 		if err != nil {
 			panic(err)
 		}
@@ -104,7 +104,7 @@ func main() {
 	}
 
 	for _, it := range list {
-		data, err := federation_store.GetAccountSummary(it)
+		data, err := federation_store.GetData("accounts_summaries:", it)
 		if err != nil {
 			panic(err)
 		}
