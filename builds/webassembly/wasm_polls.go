@@ -12,7 +12,9 @@ import (
 	"liberty-town/node/network/api_implementation/api_common/api_types"
 	"liberty-town/node/network/websocks/connection"
 	"liberty-town/node/pandora-pay/helpers"
+	"liberty-town/node/pandora-pay/helpers/generics"
 	"liberty-town/node/validator/validation"
+	"sync/atomic"
 	"syscall/js"
 )
 
@@ -71,24 +73,24 @@ func voteNow(this js.Value, args []js.Value) any {
 			},
 		}
 
-		results := 0
+		results := &atomic.Int32{}
 		if err = federation_network.FetchData[api_types.APIMethodStoreResult]("store-vote",
 			&api_types.APIMethodStoreIdentityRequest{
 				newVote.Identity,
 				helpers.SerializeToBytes(newVote),
 			}, func(a *api_types.APIMethodStoreResult, b *connection.AdvancedConnection) bool {
 				if a != nil && a.Result {
-					results++
+					results.Add(1)
 				}
 				return true
-			}); err != nil {
+			}, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 
 		return webassembly_utils.ConvertJSONBytes(struct {
 			Poll    *polls.Poll `json:"poll"`
-			Results int         `json:"results"`
-		}{newPoll, results})
+			Results int32       `json:"results"`
+		}{newPoll, results.Load()})
 
 	})
 }

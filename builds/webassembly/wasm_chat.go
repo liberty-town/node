@@ -6,6 +6,7 @@ import (
 	"errors"
 	"liberty-town/node/addresses"
 	"liberty-town/node/builds/webassembly/webassembly_utils"
+	"liberty-town/node/config"
 	"liberty-town/node/cryptography"
 	"liberty-town/node/federations/chat/chat_message"
 	"liberty-town/node/federations/federation_network"
@@ -17,9 +18,11 @@ import (
 	"liberty-town/node/network/websocks/connection"
 	"liberty-town/node/pandora-pay/helpers"
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
+	"liberty-town/node/pandora-pay/helpers/generics"
 	"liberty-town/node/pandora-pay/helpers/msgpack"
 	"liberty-town/node/settings"
 	"liberty-town/node/validator/validation"
+	"sync/atomic"
 	"syscall/js"
 )
 
@@ -83,7 +86,7 @@ func chatGetConversations(this js.Value, args []js.Value) any {
 
 			return errors.New("msg invalid")
 
-		}, nil)
+		}, config.CHAT_CONVERSATIONS_LIST_COUNT, &generics.Map[string, bool]{})
 
 		return count, err
 	})
@@ -172,21 +175,21 @@ func chatSendMessage(this js.Value, args []js.Value) any {
 			return nil, err
 		}
 
-		results := 0
+		results := &atomic.Int32{}
 		if err = federation_network.FetchData[api_types.APIMethodStoreResult]("store-msg", api_types.APIMethodStoreRequest{helpers.SerializeToBytes(msg)}, func(a *api_types.APIMethodStoreResult, b *connection.AdvancedConnection) bool {
 			if a != nil && a.Result {
-				results++
+				results.Add(1)
 			}
 			return true
-		}); err != nil {
+		}, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 
 		return webassembly_utils.ConvertJSONBytes(struct {
 			ChatMessage *chat_message.ChatMessage `json:"message"`
 			Id          string                    `json:"id"`
-			Results     int                       `json:"results"`
-		}{msg, msg.GetUniqueId(), results})
+			Results     int32                     `json:"results"`
+		}{msg, msg.GetUniqueId(), results.Load()})
 
 	})
 }
@@ -253,7 +256,7 @@ func chatGetMessages(this js.Value, args []js.Value) any {
 
 			return errors.New("msg invalid")
 
-		}, nil)
+		}, config.CHAT_MESSAGES_LIST_COUNT, &generics.Map[string, bool]{})
 
 		return count, err
 

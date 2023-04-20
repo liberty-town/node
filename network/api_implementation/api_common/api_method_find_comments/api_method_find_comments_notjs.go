@@ -1,3 +1,6 @@
+//go:build !wasm
+// +build !wasm
+
 package api_method_find_comments
 
 import (

@@ -1,3 +1,6 @@
+//go:build !wasm
+// +build !wasm
+
 package federation_store
 
 import (

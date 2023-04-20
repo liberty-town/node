@@ -5,6 +5,7 @@ import (
 	"errors"
 	"liberty-town/node/addresses"
 	"liberty-town/node/builds/webassembly/webassembly_utils"
+	"liberty-town/node/config"
 	"liberty-town/node/cryptography"
 	"liberty-town/node/federations/federation_network"
 	"liberty-town/node/federations/federation_network/sync_type"
@@ -16,7 +17,6 @@ import (
 	"liberty-town/node/federations/federation_store/store_data/listings/offer"
 	"liberty-town/node/federations/federation_store/store_data/listings/shipping"
 	"liberty-town/node/federations/federation_store/store_data/listings_summaries"
-	"liberty-town/node/gui"
 	"liberty-town/node/network/api_implementation/api_common/api_method_find_listings"
 	"liberty-town/node/network/api_implementation/api_common/api_method_search_listings"
 	"liberty-town/node/network/api_implementation/api_common/api_method_sync_item"
@@ -24,8 +24,10 @@ import (
 	"liberty-town/node/network/websocks/connection"
 	"liberty-town/node/pandora-pay/helpers"
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
+	"liberty-town/node/pandora-pay/helpers/generics"
 	"liberty-town/node/settings"
 	"strconv"
+	"sync/atomic"
 	"syscall/js"
 )
 
@@ -119,20 +121,20 @@ func listingStore(this js.Value, args []js.Value) any {
 			return nil, err
 		}
 
-		results := 0
+		results := &atomic.Int32{}
 		if err = federation_network.FetchData[api_types.APIMethodStoreResult]("store-listing", &api_types.APIMethodStoreRequest{helpers.SerializeToBytes(it)}, func(a *api_types.APIMethodStoreResult, b *connection.AdvancedConnection) bool {
 			if a != nil && a.Result {
-				results++
+				results.Add(1)
 			}
 			return true
-		}); err != nil {
+		}, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 
 		return webassembly_utils.ConvertJSONBytes(struct {
 			Listing *listings.Listing `json:"listing"`
-			Results int               `json:"results"`
-		}{it, results})
+			Results int32             `json:"results"`
+		}{it, results.Load()})
 
 	})
 }
@@ -175,7 +177,7 @@ func listingGet(this js.Value, args []js.Value) any {
 				listing = temp
 			}
 			return true
-		}); err != nil {
+		}, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 
@@ -213,66 +215,46 @@ func listingsSearch(this js.Value, args []js.Value) any {
 			ListingSummary *listings_summaries.ListingSummary `json:"listingSummary"`
 		}
 
-		count := 0
+		count := atomic.Int32{}
+		banned := &generics.Map[string, bool]{}
 
-		list, err := federation_network.JustAggregateData("search-listings", &api_method_search_listings.APIMethodSearchListingsRequest{
+		if err := federation_network.AggregateListAndCustomProcess("search-listings", &api_method_search_listings.APIMethodSearchListingsRequest{
 			req.Type,
 			req.Query,
 			req.QueryType,
 			req.Start,
 			req.ShippingType,
 			req.Shipping,
-		})
+		}, func(searchResult *federation_network.AggregationListResult) (err error) {
 
-		if err != nil {
-			return nil, err
-		}
+			var listing *listings.Listing
+			if err = federation_network.AggregateBestResult[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
+				sync_type.SYNC_LISTINGS,
+				searchResult.Key,
+			}, "get-listing", nil, func(answer *api_types.APIMethodGetResult, key string, score float64) error {
+				if len(answer.Result) > 0 {
 
-		duplicates := make(map[string]bool)
-		banned := make(map[string]bool)
-
-		for _, searchResult := range list {
-
-			if duplicates[searchResult.Key] || banned[searchResult.Conn.RemoteAddr] { //已经找到 || 已被禁止
-				continue
-			}
-
-			if err = func() error {
-
-				listing := &listings.Listing{}
-				if err = federation_network.AggregateBestData[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
-					sync_type.SYNC_LISTINGS,
-					searchResult.Key,
-				}, "get-listing", nil, func(answer *api_types.APIMethodGetResult, key string, score float64) error {
-					if len(answer.Result) > 0 {
-						if err := listing.Deserialize(advanced_buffers.NewBufferReader(answer.Result)); err != nil {
-							return err
-						}
-
-						if !listing.FederationIdentity.Equals(f.Federation.Ownership.Address) ||
-							listing.Validate() != nil || listing.ValidateSignatures() != nil ||
-							!f.Federation.IsValidationAccepted(listing.Validation) {
-							return errors.New("listing was not accepted")
-						}
-
-						if listing.Identity.Encoded != searchResult.Key {
-							return errors.New("listing identity mismatch")
-						}
+					listing = &listings.Listing{}
+					if err = listing.Deserialize(advanced_buffers.NewBufferReader(answer.Result)); err != nil {
+						return err
 					}
-					return nil
-				}, banned); err != nil {
-					return err
-				}
 
-				if listing == nil {
-					return errors.New("listing not found")
+					if !listing.FederationIdentity.Equals(f.Federation.Ownership.Address) ||
+						listing.Validate() != nil || listing.ValidateSignatures() != nil ||
+						!f.Federation.IsValidationAccepted(listing.Validation) {
+						return errors.New("listing was not accepted")
+					}
+
+					if listing.Identity.Encoded != searchResult.Key {
+						return errors.New("listing identity mismatch")
+					}
 				}
 
 				var accountSummary *accounts_summaries.AccountSummary
 				var listingSummary *listings_summaries.ListingSummary
 
 				//pass banned
-				if err = federation_network.AggregateBestData[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
+				if err = federation_network.AggregateBestResult[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
 					sync_type.SYNC_ACCOUNTS_SUMMARIES,
 					listing.Publisher.Address.Encoded,
 				}, "get-account-summary", nil, func(answer *api_types.APIMethodGetResult, key string, score float64) error {
@@ -289,11 +271,12 @@ func listingsSearch(this js.Value, args []js.Value) any {
 						}
 					}
 					return nil
+					//}, banned); err != nil {
 				}, banned); err != nil {
 					return err
 				}
 
-				if err = federation_network.AggregateBestData[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
+				if err = federation_network.AggregateBestResult[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
 					sync_type.SYNC_LISTINGS_SUMMARIES,
 					listing.Identity.Encoded,
 				}, "get-listing-summary", nil, func(answer *api_types.APIMethodGetResult, key string, score float64) error {
@@ -348,8 +331,6 @@ func listingsSearch(this js.Value, args []js.Value) any {
 					}
 				}
 
-				duplicates[searchResult.Key] = true
-
 				result := &SearchResult{searchResult.Key, foundScore, listing, accountSummary, listingSummary}
 				b2, err := webassembly_utils.ConvertJSONBytes(result)
 				if err != nil {
@@ -357,17 +338,23 @@ func listingsSearch(this js.Value, args []js.Value) any {
 				}
 
 				args[1].Invoke(b2)
-				count++
+				count.Add(1)
 
 				return nil
-			}(); err != nil {
-				gui.GUI.Error("banning connection", searchResult.Conn.RemoteAddr, err)
-				banned[searchResult.Conn.RemoteAddr] = true
+			}, banned); err != nil {
+				return err
 			}
 
+			if listing == nil {
+				return errors.New("listing not found")
+			}
+
+			return nil
+		}, config.LISTINGS_LIST_COUNT, banned); err != nil {
+			return nil, err
 		}
 
-		return count, err
+		return count.Load(), nil
 	})
 }
 
@@ -400,104 +387,87 @@ func listingsGetAll(this js.Value, args []js.Value) any {
 			ListingSummary *listings_summaries.ListingSummary `json:"listingSummary"`
 		}
 
-		list, err := federation_network.JustAggregateData("find-listings", api_method_find_listings.APIMethodFindListingsRequest{
+		count := atomic.Int32{}
+		banned := &generics.Map[string, bool]{}
+
+		if err := federation_network.AggregateListAndCustomProcess("find-listings", api_method_find_listings.APIMethodFindListingsRequest{
 			req.Account,
 			req.Type,
 			req.Start,
-		})
-		if err != nil {
+		}, func(searchResult *federation_network.AggregationListResult) (err error) {
+
+			var listing *listings.Listing
+			if err = federation_network.AggregateBestResult[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
+				sync_type.SYNC_LISTINGS,
+				searchResult.Key,
+			}, "get-listing", nil, func(answer *api_types.APIMethodGetResult, key string, score float64) error {
+				if len(answer.Result) > 0 {
+					listing = &listings.Listing{}
+					if err = listing.Deserialize(advanced_buffers.NewBufferReader(answer.Result)); err != nil {
+						return err
+					}
+
+					if !listing.FederationIdentity.Equals(f.Federation.Ownership.Address) ||
+						listing.Validate() != nil || listing.ValidateSignatures() != nil ||
+						!f.Federation.IsValidationAccepted(listing.Validation) {
+						return errors.New("listing was not accepted")
+					}
+
+					if listing.Identity.Encoded != searchResult.Key {
+						return errors.New("listing identity mismatch")
+					}
+					if !listing.Publisher.Address.Equals(req.Account) {
+						return errors.New("invalid search")
+					}
+					if float64(listing.Publisher.Timestamp) < searchResult.Score {
+						return errors.New("invalid score")
+					}
+
+				}
+				return nil
+			}, banned); err != nil {
+				return err
+			}
+
+			if listing == nil {
+				return errors.New("listing not found")
+			}
+
+			var listingSummary *listings_summaries.ListingSummary
+			if err = federation_network.AggregateBestResult[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
+				sync_type.SYNC_LISTINGS_SUMMARIES,
+				listing.Identity.Encoded,
+			}, "get-listing-summary", nil, func(answer *api_types.APIMethodGetResult, key string, score float64) error {
+				if len(answer.Result) > 0 {
+					listingSummary = &listings_summaries.ListingSummary{}
+					if err := listingSummary.Deserialize(advanced_buffers.NewBufferReader(answer.Result)); err != nil {
+						return err
+					}
+					if listingSummary.Validate() != nil || listingSummary.ValidateSignatures() != nil || !f.Federation.IsValidationAccepted(listingSummary.Validation) {
+						return errors.New("listing summary is invalid")
+					}
+					if !listingSummary.ListingIdentity.Equals(listing.Identity) {
+						return errors.New("listingSummary identity mismatch")
+					}
+				}
+				return nil
+			}, banned); err != nil {
+				return err
+			}
+
+			b2, err := webassembly_utils.ConvertJSONBytes(&SearchResult{searchResult.Key, searchResult.Score, listing, listingSummary})
+			if err != nil {
+				return err
+			}
+
+			args[1].Invoke(b2)
+			count.Add(1)
+
+			return
+		}, config.LISTINGS_LIST_COUNT, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 
-		duplicates := make(map[string]bool)
-		banned := make(map[string]bool)
-
-		count := 0
-
-		for _, searchResult := range list {
-
-			if duplicates[searchResult.Key] || banned[searchResult.Conn.RemoteAddr] { //已经找到 || 已被禁止
-				continue
-			}
-
-			if err = func() error {
-
-				listing := &listings.Listing{}
-				if err = federation_network.AggregateBestData[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
-					sync_type.SYNC_LISTINGS,
-					searchResult.Key,
-				}, "get-listing", nil, func(answer *api_types.APIMethodGetResult, key string, score float64) error {
-					if len(answer.Result) > 0 {
-						if err := listing.Deserialize(advanced_buffers.NewBufferReader(answer.Result)); err != nil {
-							return err
-						}
-
-						if !listing.FederationIdentity.Equals(f.Federation.Ownership.Address) ||
-							listing.Validate() != nil || listing.ValidateSignatures() != nil ||
-							!f.Federation.IsValidationAccepted(listing.Validation) {
-							return errors.New("listing was not accepted")
-						}
-
-						if listing.Identity.Encoded != searchResult.Key {
-							return errors.New("listing identity mismatch")
-						}
-						if !listing.Publisher.Address.Equals(req.Account) {
-							return errors.New("invalid search")
-						}
-						if float64(listing.Publisher.Timestamp) < searchResult.Score {
-							return errors.New("invalid score")
-						}
-
-					}
-					return nil
-				}, banned); err != nil {
-					return err
-				}
-
-				if listing == nil {
-					return errors.New("listing not found")
-				}
-
-				var listingSummary *listings_summaries.ListingSummary
-				if err = federation_network.AggregateBestData[api_types.APIMethodGetResult]("sync-item", &api_method_sync_item.APIMethodSyncItemRequest{
-					sync_type.SYNC_LISTINGS_SUMMARIES,
-					listing.Identity.Encoded,
-				}, "get-listing-summary", nil, func(answer *api_types.APIMethodGetResult, key string, score float64) error {
-					if len(answer.Result) > 0 {
-						listingSummary = &listings_summaries.ListingSummary{}
-						if err := listingSummary.Deserialize(advanced_buffers.NewBufferReader(answer.Result)); err != nil {
-							return err
-						}
-						if listingSummary.Validate() != nil || listingSummary.ValidateSignatures() != nil || !f.Federation.IsValidationAccepted(listingSummary.Validation) {
-							return errors.New("listing summary is invalid")
-						}
-						if !listingSummary.ListingIdentity.Equals(listing.Identity) {
-							return errors.New("listingSummary identity mismatch")
-						}
-					}
-					return nil
-				}, banned); err != nil {
-					return err
-				}
-
-				duplicates[searchResult.Key] = true
-
-				b2, err := webassembly_utils.ConvertJSONBytes(&SearchResult{searchResult.Key, searchResult.Score, listing, listingSummary})
-				if err != nil {
-					return err
-				}
-
-				args[1].Invoke(b2)
-				count++
-
-				return nil
-			}(); err != nil {
-				gui.GUI.Error("banning connection", searchResult.Conn.RemoteAddr, err)
-				banned[searchResult.Conn.RemoteAddr] = true
-			}
-
-		}
-
-		return count, err
+		return count.Load(), nil
 	})
 }

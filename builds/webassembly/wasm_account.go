@@ -13,7 +13,9 @@ import (
 	"liberty-town/node/network/websocks/connection"
 	"liberty-town/node/pandora-pay/helpers"
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
+	"liberty-town/node/pandora-pay/helpers/generics"
 	"liberty-town/node/settings"
+	"sync/atomic"
 	"syscall/js"
 )
 
@@ -60,20 +62,20 @@ func accountStore(this js.Value, args []js.Value) any {
 			return nil, err
 		}
 
-		results := 0
+		results := atomic.Int32{}
 		if err = federation_network.FetchData[api_types.APIMethodStoreResult]("store-account", &api_types.APIMethodStoreRequest{helpers.SerializeToBytes(it)}, func(a *api_types.APIMethodStoreResult, b *connection.AdvancedConnection) bool {
 			if a != nil && a.Result {
-				results++
+				results.Add(1)
 			}
 			return true
-		}); err != nil {
+		}, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 
 		return webassembly_utils.ConvertJSONBytes(struct {
 			Account *accounts.Account `json:"account"`
-			Results int               `json:"results"`
-		}{it, results})
+			Results int32             `json:"results"`
+		}{it, results.Load()})
 
 	})
 }
@@ -118,7 +120,7 @@ func accountGet(this js.Value, args []js.Value) any {
 				account = temp
 			}
 			return true
-		}); err != nil {
+		}, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 

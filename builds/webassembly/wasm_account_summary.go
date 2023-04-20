@@ -12,7 +12,9 @@ import (
 	"liberty-town/node/network/websocks/connection"
 	"liberty-town/node/pandora-pay/helpers"
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
+	"liberty-town/node/pandora-pay/helpers/generics"
 	"liberty-town/node/settings"
+	"sync/atomic"
 	"syscall/js"
 )
 
@@ -52,7 +54,7 @@ func accountSummaryGet(this js.Value, args []js.Value) any {
 				accountSummary = temp
 			}
 			return true
-		}); err != nil {
+		}, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 
@@ -72,7 +74,7 @@ func accountSummaryStore(this js.Value, args []js.Value) any {
 		var err error
 
 		req := &struct {
-			Identity        *addresses.Address `json:"identity"`
+			AccountIdentity *addresses.Address `json:"account"`
 			SalesTotal      uint64             `json:"salesTotal"`
 			SalesCount      uint64             `json:"salesCount"`
 			SalesAmount     uint64             `json:"salesAmount"`
@@ -88,7 +90,7 @@ func accountSummaryStore(this js.Value, args []js.Value) any {
 		it := &accounts_summaries.AccountSummary{
 			accounts_summaries.ACCOUNT_SUMMARY_VERSION,
 			f.Federation.Ownership.Address,
-			req.Identity,
+			req.AccountIdentity,
 			req.SalesTotal,
 			req.SalesCount,
 			req.SalesAmount,
@@ -111,21 +113,20 @@ func accountSummaryStore(this js.Value, args []js.Value) any {
 			return nil, err
 		}
 
-		results := 0
-
+		results := &atomic.Int32{}
 		if err = federation_network.FetchData[api_types.APIMethodStoreResult]("store-account-summary", api_types.APIMethodStoreRequest{helpers.SerializeToBytes(it)}, func(a *api_types.APIMethodStoreResult, b *connection.AdvancedConnection) bool {
 			if a != nil && a.Result {
-				results++
+				results.Add(1)
 			}
 			return true
-		}); err != nil {
+		}, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 
 		return webassembly_utils.ConvertJSONBytes(struct {
 			AccountSummary *accounts_summaries.AccountSummary `json:"accountSummary"`
-			Results        int                                `json:"results"`
-		}{it, results})
+			Results        int32                              `json:"results"`
+		}{it, results.Load()})
 
 	})
 }

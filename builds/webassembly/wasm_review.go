@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"liberty-town/node/addresses"
 	"liberty-town/node/builds/webassembly/webassembly_utils"
+	"liberty-town/node/config"
 	"liberty-town/node/cryptography"
 	"liberty-town/node/federations/federation_network"
 	"liberty-town/node/federations/federation_serve"
@@ -15,7 +17,9 @@ import (
 	"liberty-town/node/network/websocks/connection"
 	"liberty-town/node/pandora-pay/helpers"
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
+	"liberty-town/node/pandora-pay/helpers/generics"
 	"liberty-town/node/settings"
+	"sync/atomic"
 	"syscall/js"
 )
 
@@ -30,8 +34,8 @@ func reviewStore(this js.Value, args []js.Value) any {
 		var err error
 
 		req := &struct {
-			ListingIdentity *addresses.Address `json:"listingIdentity,omitempty"`
-			AccountIdentity *addresses.Address `json:"accountIdentity,omitempty"`
+			ListingIdentity *addresses.Address `json:"listing,omitempty"`
+			AccountIdentity *addresses.Address `json:"account,omitempty"`
 			Text            string             `json:"text"`
 			Score           byte               `json:"score"`
 			Amount          uint64             `json:"amount"`
@@ -75,6 +79,9 @@ func reviewStore(this js.Value, args []js.Value) any {
 			&ownership.Ownership{},
 		}
 
+		x, _ := json.Marshal(it)
+		fmt.Println("json", string(x))
+
 		if it.Validation, _, err = federationValidate(f.Federation, it.GetMessageForSigningValidator, args[1], nil); err != nil {
 			return nil, err
 		}
@@ -91,20 +98,20 @@ func reviewStore(this js.Value, args []js.Value) any {
 			return nil, err
 		}
 
-		results := 0
+		results := &atomic.Int32{}
 		if err = federation_network.FetchData[api_types.APIMethodStoreResult]("store-review", api_types.APIMethodStoreRequest{helpers.SerializeToBytes(it)}, func(a *api_types.APIMethodStoreResult, b *connection.AdvancedConnection) bool {
 			if a != nil && a.Result {
-				results++
+				results.Add(1)
 			}
 			return true
-		}); err != nil {
+		}, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 
 		return webassembly_utils.ConvertJSONBytes(struct {
 			Review  *reviews.Review `json:"review"`
-			Results int             `json:"results"`
-		}{it, results})
+			Results int32           `json:"results"`
+		}{it, results.Load()})
 
 	})
 }
@@ -180,7 +187,7 @@ func reviewsGetAll(this js.Value, args []js.Value) any {
 
 			count++
 			return nil
-		}, nil)
+		}, config.REVIEWS_LIST_COUNT, &generics.Map[string, bool]{})
 
 		return count, err
 	})

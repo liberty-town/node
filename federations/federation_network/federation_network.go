@@ -3,17 +3,20 @@ package federation_network
 import (
 	"context"
 	"errors"
+	"fmt"
 	"golang.org/x/exp/slices"
+	"liberty-town/node/config"
 	"liberty-town/node/federations/federation_serve"
-	"liberty-town/node/gui"
 	"liberty-town/node/network/api_implementation/api_common/api_method_sync_item"
 	"liberty-town/node/network/api_implementation/api_common/api_types"
 	"liberty-town/node/network/connected_nodes"
 	"liberty-town/node/network/network_config"
 	"liberty-town/node/network/websocks"
 	"liberty-town/node/network/websocks/connection"
+	"liberty-town/node/pandora-pay/helpers/generics"
 	"liberty-town/node/pandora-pay/helpers/msgpack"
 	"sync"
+	"sync/atomic"
 )
 
 type AggregationListResult struct {
@@ -22,7 +25,8 @@ type AggregationListResult struct {
 	Conn  *connection.AdvancedConnection
 }
 
-func JustAggregateData(methodFindList string, req any) ([]*AggregationListResult, error) {
+func JustAggregateData(methodFindList string, req any, banned *generics.Map[string, bool]) ([]*AggregationListResult, error) {
+
 	list := make([]*AggregationListResult, 0)
 	lock := &sync.Mutex{}
 
@@ -45,7 +49,7 @@ func JustAggregateData(methodFindList string, req any) ([]*AggregationListResult
 		}
 
 		return true
-	}); err != nil {
+	}, banned); err != nil {
 		return nil, err
 	}
 
@@ -56,65 +60,109 @@ func JustAggregateData(methodFindList string, req any) ([]*AggregationListResult
 	return list, nil
 }
 
-func AggregateData[T any](list []*AggregationListResult, methodFindItem string, getRequest func(data *AggregationListResult) (any, error), validateItem func(*T, string, float64) error, returnFirst bool, banned map[string]bool) error {
+func AggregateDataFromList[T any](list []*AggregationListResult, methodFindItem string, getRequest func(data *AggregationListResult) (any, error), validateItem func(*T, string, float64) error, count int32, banned *generics.Map[string, bool]) error {
 
-	duplicates := make(map[string]bool)
-
-	if banned == nil {
-		banned = make(map[string]bool)
-	}
-
-	for _, it := range list {
-
-		k := it.Key
-
-		if duplicates[k] || banned[it.Conn.RemoteAddr] { //已经找到 || 已被禁止
-			continue
-		}
+	return ProcessDataFromList(list, count, func(searchItem *AggregationListResult) error {
 
 		var request any
 		var err error
 		if getRequest != nil {
-			if request, err = getRequest(it); err != nil {
-				banned[it.Conn.RemoteAddr] = true
-				continue
+			if request, err = getRequest(searchItem); err != nil {
+				return err
 			}
 		} else {
 			request = &api_types.APIMethodGetRequest{
-				it.Key,
+				searchItem.Key,
 			}
 		}
 
-		answer, err := connection.SendJSONAwaitAnswer[T](it.Conn, []byte(methodFindItem), request, nil, 0)
+		answer, err := connection.SendJSONAwaitAnswer[T](searchItem.Conn, []byte(methodFindItem), request, nil, 0)
 		if err != nil {
-			continue
-		}
-
-		if err = validateItem(answer, it.Key, it.Score); err != nil {
-			banned[it.Conn.RemoteAddr] = true
-			continue
-		}
-
-		duplicates[k] = true
-		if returnFirst {
 			return nil
 		}
 
+		if err = validateItem(answer, searchItem.Key, searchItem.Score); err != nil {
+			return err
+		}
+
+		return nil
+	}, banned)
+
+}
+
+func ProcessDataFromList(list []*AggregationListResult, count int32, process func(searchItem *AggregationListResult) error, banned *generics.Map[string, bool]) error {
+
+	duplicates := &generics.Map[string, bool]{}
+
+	jobs := make(chan *AggregationListResult, len(list))
+	results := make(chan bool, len(list))
+	counter := &atomic.Int32{}
+	counter.Store(0)
+
+	worker := func() {
+
+		for listItem := range jobs {
+
+			func() {
+
+				if counter.Load() >= count {
+					return
+				}
+				if exists, _ := duplicates.Load(listItem.Key); exists {
+					return
+				}
+				if exists, _ := banned.Load(listItem.Conn.RemoteAddr); exists {
+					return
+				}
+
+				if err := process(listItem); err == nil {
+					counter.Add(1)
+					duplicates.Store(listItem.Key, true)
+				}
+
+			}()
+
+			results <- true
+		}
+
+	}
+
+	for w := 0; w < config.CONCURENCY; w++ {
+		go worker()
+	}
+
+	for _, conn := range list {
+		jobs <- conn
+	}
+
+	close(jobs)
+
+	for range list {
+		<-results
 	}
 
 	return nil
 }
 
-func AggregateListData[T any](methodFindList string, req any, methodFindItem string, getRequest func(data *AggregationListResult) (any, error), validateItem func(*T, string, float64) error, banned map[string]bool) error {
-	list, err := JustAggregateData(methodFindList, req)
+func AggregateListData[T any](methodFindList string, req any, methodFindItem string, getRequest func(data *AggregationListResult) (any, error), validateItem func(*T, string, float64) error, count int32, banned *generics.Map[string, bool]) error {
+	list, err := JustAggregateData(methodFindList, req, banned)
 	if err != nil {
 		return err
 	}
 
-	return AggregateData[T](list, methodFindItem, getRequest, validateItem, false, banned)
+	return AggregateDataFromList[T](list, methodFindItem, getRequest, validateItem, count, banned)
 }
 
-func AggregateBestData[T any](methodFindList string, req *api_method_sync_item.APIMethodSyncItemRequest, methodFindItem string, getRequest func(data *AggregationListResult) (any, error), validateItem func(*T, string, float64) error, banned map[string]bool) error {
+func AggregateListAndCustomProcess(methodFindList string, req any, validateItem func(searchItem *AggregationListResult) error, count int32, banned *generics.Map[string, bool]) error {
+	list, err := JustAggregateData(methodFindList, req, banned)
+	if err != nil {
+		return err
+	}
+
+	return ProcessDataFromList(list, count, validateItem, banned)
+}
+
+func AggregateBestResult[T any](methodFindList string, req *api_method_sync_item.APIMethodSyncItemRequest, methodFindItem string, getRequest func(data *AggregationListResult) (any, error), validateItem func(*T, string, float64) error, banned *generics.Map[string, bool]) error {
 
 	list := make([]*AggregationListResult, 0)
 	lock := &sync.Mutex{}
@@ -136,7 +184,7 @@ func AggregateBestData[T any](methodFindList string, req *api_method_sync_item.A
 		lock.Unlock()
 
 		return true
-	}); err != nil {
+	}, banned); err != nil {
 		return err
 	}
 
@@ -144,10 +192,10 @@ func AggregateBestData[T any](methodFindList string, req *api_method_sync_item.A
 		return a.Score > b.Score
 	})
 
-	return AggregateData[T](list, methodFindItem, getRequest, validateItem, true, banned)
+	return AggregateDataFromList[T](list, methodFindItem, getRequest, validateItem, 1, banned)
 }
 
-func FetchData[T any](method string, data any, next func(*T, *connection.AdvancedConnection) bool) error {
+func FetchData[T any](method string, data any, next func(*T, *connection.AdvancedConnection) bool, banned *generics.Map[string, bool]) error {
 
 	f := federation_serve.ServeFederation.Load()
 	if f == nil {
@@ -168,26 +216,57 @@ func FetchData[T any](method string, data any, next func(*T, *connection.Advance
 			continue
 		}
 
+		jobs := make(chan *connection.AdvancedConnection, len(list))
+		results := make(chan bool, len(list))
+		done := &generics.Value[bool]{}
+		done.Store(false)
+
+		worker := func() {
+			for conn := range jobs {
+				func() {
+
+					if done.Load() {
+						return
+					}
+
+					if exists, _ := banned.Load(conn.RemoteAddr); exists {
+						return
+					}
+
+					out := conn.SendAwaitAnswer([]byte(method), b, context.Background(), 0)
+					if out.Err != nil {
+						fmt.Println("error", out.Err)
+						banned.Store(conn.RemoteAddr, true)
+						return
+					}
+
+					final := new(T)
+					if err = msgpack.Unmarshal(out.Out, final); err != nil {
+						fmt.Println("error2", out.Err)
+						banned.Store(conn.RemoteAddr, true)
+						return
+					}
+
+					if next != nil && !next(final, conn) {
+						done.Store(true)
+					}
+				}()
+				results <- true
+			}
+		}
+
+		for w := 0; w < config.CONCURENCY; w++ {
+			go worker()
+		}
+
 		for _, conn := range list {
+			jobs <- conn
+		}
 
-			out := conn.SendAwaitAnswer([]byte(method), b, context.Background(), 0)
-			if out.Err != nil {
-				gui.GUI.Error("Error sending request", out.Err)
-				continue
-			}
+		close(jobs)
 
-			final := new(T)
-			if err = msgpack.Unmarshal(out.Out, final); err != nil {
-				gui.GUI.Error("Error retrieving answer", err)
-				continue
-			}
-
-			if next != nil {
-				if !next(final, conn) {
-					break
-				}
-			}
-
+		for range list {
+			<-results
 		}
 
 		break

@@ -12,7 +12,9 @@ import (
 	"liberty-town/node/network/websocks/connection"
 	"liberty-town/node/pandora-pay/helpers"
 	"liberty-town/node/pandora-pay/helpers/advanced_buffers"
+	"liberty-town/node/pandora-pay/helpers/generics"
 	"liberty-town/node/settings"
+	"sync/atomic"
 	"syscall/js"
 )
 
@@ -53,7 +55,7 @@ func listingSummaryGet(this js.Value, args []js.Value) any {
 				listingSummary = temp
 			}
 			return true
-		}); err != nil {
+		}, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 
@@ -73,10 +75,10 @@ func listingSummaryStore(this js.Value, args []js.Value) any {
 		var err error
 
 		req := &struct {
-			Listing *addresses.Address `json:"listing"`
-			Total   uint64             `json:"Total"`
-			Count   uint64             `json:"Count"`
-			Amount  uint64             `json:"Amount"`
+			ListingIdentity *addresses.Address `json:"listing"`
+			Total           uint64             `json:"Total"`
+			Count           uint64             `json:"Count"`
+			Amount          uint64             `json:"Amount"`
 		}{}
 
 		if err = webassembly_utils.UnmarshalBytes(args[0], req); err != nil {
@@ -86,7 +88,7 @@ func listingSummaryStore(this js.Value, args []js.Value) any {
 		it := &listings_summaries.ListingSummary{
 			listings_summaries.LISTING_SUMMARY_VERSION,
 			f.Federation.Ownership.Address,
-			req.Listing,
+			req.ListingIdentity,
 			req.Total,
 			req.Count,
 			req.Amount,
@@ -106,21 +108,20 @@ func listingSummaryStore(this js.Value, args []js.Value) any {
 			return nil, err
 		}
 
-		results := 0
-
+		results := &atomic.Int32{}
 		if err = federation_network.FetchData[api_types.APIMethodStoreResult]("store-listing-summary", &api_types.APIMethodStoreRequest{helpers.SerializeToBytes(it)}, func(a *api_types.APIMethodStoreResult, b *connection.AdvancedConnection) bool {
 			if a != nil && a.Result {
-				results++
+				results.Add(1)
 			}
 			return true
-		}); err != nil {
+		}, &generics.Map[string, bool]{}); err != nil {
 			return nil, err
 		}
 
 		return webassembly_utils.ConvertJSONBytes(struct {
 			ListingSummary *listings_summaries.ListingSummary `json:"listingSummary"`
-			Results        int                                `json:"results"`
-		}{it, results})
+			Results        int32                              `json:"results"`
+		}{it, results.Load()})
 
 	})
 }
